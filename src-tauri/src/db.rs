@@ -83,7 +83,10 @@ fn sql_params(params: &[Value]) -> Result<Vec<SqlParam>, String> {
 }
 
 fn value_from_row(row: &Row<'_>, index: usize) -> Result<Value, String> {
-    match row.get_ref(index).map_err(|e| format!("read column: {e}"))? {
+    match row
+        .get_ref(index)
+        .map_err(|e| format!("read column: {e}"))?
+    {
         ValueRef::Null => Ok(Value::Null),
         ValueRef::Integer(value) => Ok(Value::Number(value.into())),
         ValueRef::Real(value) => Ok(Number::from_f64(value)
@@ -113,20 +116,14 @@ pub fn shell_db_query(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| format!("read columns: {e}"))?;
 
-    let param_refs: Vec<&dyn ToSql> = sql_params
-        .iter()
-        .map(|param| param as &dyn ToSql)
-        .collect();
+    let param_refs: Vec<&dyn ToSql> = sql_params.iter().map(|param| param as &dyn ToSql).collect();
 
     let mut rows = Vec::new();
     let mut row_iterator = statement
         .query(param_refs.as_slice())
         .map_err(|e| format!("execute query: {e}"))?;
 
-    while let Some(row) = row_iterator
-        .next()
-        .map_err(|e| format!("read row: {e}"))?
-    {
+    while let Some(row) = row_iterator.next().map_err(|e| format!("read row: {e}"))? {
         let mut values = Vec::with_capacity(column_count);
         for index in 0..column_count {
             values.push(value_from_row(row, index)?);
@@ -150,10 +147,7 @@ pub fn shell_db_execute(
         .prepare(&query)
         .map_err(|e| format!("prepare query: {e}"))?;
 
-    let param_refs: Vec<&dyn ToSql> = sql_params
-        .iter()
-        .map(|param| param as &dyn ToSql)
-        .collect();
+    let param_refs: Vec<&dyn ToSql> = sql_params.iter().map(|param| param as &dyn ToSql).collect();
 
     statement
         .execute(param_refs.as_slice())

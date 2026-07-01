@@ -152,7 +152,10 @@ fn try_deploy_config(searched: &mut Vec<ConfigSearch>) -> Result<Option<ConfigDi
     Ok(None)
 }
 
-fn try_bundled_config(app: &App, searched: &mut Vec<ConfigSearch>) -> Result<Option<ConfigDiscovery>, String> {
+fn try_bundled_config(
+    app: &App,
+    searched: &mut Vec<ConfigSearch>,
+) -> Result<Option<ConfigDiscovery>, String> {
     let path = match app.path().resolve("app.toml", BaseDirectory::Resource) {
         Ok(path) => path,
         Err(error) => {
@@ -342,7 +345,10 @@ MALFORMED_LINE_NO_EQUALS
         let values = parse_dotenv(text);
         assert_eq!(values.get("FOO").map(String::as_str), Some("bar"));
         assert_eq!(values.get("BAZ").map(String::as_str), Some("quoted value"));
-        assert_eq!(values.get("SINGLE").map(String::as_str), Some("also quoted"));
+        assert_eq!(
+            values.get("SINGLE").map(String::as_str),
+            Some("also quoted")
+        );
         assert_eq!(values.get("EMPTY").map(String::as_str), Some(""));
         assert_eq!(values.len(), 4);
     }

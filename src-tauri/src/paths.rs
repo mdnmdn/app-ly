@@ -74,8 +74,7 @@ pub fn resolve_paths(
     };
 
     std::fs::create_dir_all(&data_root).map_err(|e| format!("create data dir: {e}"))?;
-    std::fs::create_dir_all(data_root.join("logs"))
-        .map_err(|e| format!("create logs dir: {e}"))?;
+    std::fs::create_dir_all(data_root.join("logs")).map_err(|e| format!("create logs dir: {e}"))?;
 
     Ok(ResolvedPaths {
         icon,

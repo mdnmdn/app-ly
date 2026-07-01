@@ -5,19 +5,9 @@ use tauri::{App, Manager};
 const MENU_RELOAD: &str = "shell-menu-reload";
 const MENU_DEVTOOLS: &str = "shell-menu-devtools";
 
-pub fn setup_app_menu(
-    app: &App,
-    app_menu_title: &str,
-    show_dev_menu: bool,
-) -> Result<(), String> {
-    let reload = MenuItem::with_id(
-        app,
-        MENU_RELOAD,
-        "Reload",
-        true,
-        Some("CmdOrCtrl+Shift+R"),
-    )
-    .map_err(|e| format!("create reload menu item: {e}"))?;
+pub fn setup_app_menu(app: &App, app_menu_title: &str, show_dev_menu: bool) -> Result<(), String> {
+    let reload = MenuItem::with_id(app, MENU_RELOAD, "Reload", true, Some("CmdOrCtrl+Shift+R"))
+        .map_err(|e| format!("create reload menu item: {e}"))?;
 
     let edit_submenu = SubmenuBuilder::new(app, "Edit")
         .cut()

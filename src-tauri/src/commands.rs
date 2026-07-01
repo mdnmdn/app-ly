@@ -148,10 +148,7 @@ pub fn shell_open_file(state: State<'_, ShellState>, name: String) -> Result<(),
 }
 
 #[tauri::command]
-pub fn shell_open_file_location(
-    state: State<'_, ShellState>,
-    name: String,
-) -> Result<(), String> {
+pub fn shell_open_file_location(state: State<'_, ShellState>, name: String) -> Result<(), String> {
     let path = data_file_path(&state, &name)?;
     require_exists(&path)?;
     reveal_path(&path)
@@ -351,8 +348,12 @@ pub fn shell_get_screens(app: AppHandle) -> Result<ScreensInfo, String> {
     let screens = monitors
         .iter()
         .map(|monitor| {
-            let is_primary = primary.as_ref().is_some_and(|primary| monitors_equal(primary, monitor));
-            let is_current = current.as_ref().is_some_and(|current| monitors_equal(current, monitor));
+            let is_primary = primary
+                .as_ref()
+                .is_some_and(|primary| monitors_equal(primary, monitor));
+            let is_current = current
+                .as_ref()
+                .is_some_and(|current| monitors_equal(current, monitor));
             monitor_to_screen(monitor, is_primary, is_current)
         })
         .collect::<Vec<_>>();
@@ -379,8 +380,12 @@ pub fn shell_get_screen_at(app: AppHandle, x: f64, y: f64) -> Result<ShellScreen
 
     Ok(monitor_to_screen(
         &monitor,
-        primary.as_ref().is_some_and(|primary| monitors_equal(primary, &monitor)),
-        current.as_ref().is_some_and(|current| monitors_equal(current, &monitor)),
+        primary
+            .as_ref()
+            .is_some_and(|primary| monitors_equal(primary, &monitor)),
+        current
+            .as_ref()
+            .is_some_and(|current| monitors_equal(current, &monitor)),
     ))
 }
 
@@ -454,10 +459,7 @@ pub async fn shell_fetch(
     Ok(FetchResponse {
         ok: status.is_success(),
         status: status.as_u16(),
-        status_text: status
-            .canonical_reason()
-            .unwrap_or("Unknown")
-            .to_string(),
+        status_text: status.canonical_reason().unwrap_or("Unknown").to_string(),
         headers: response_headers,
         body,
     })
@@ -526,7 +528,10 @@ pub fn shell_open_window(
     let nav_app = app.clone();
     let nav_label = label.clone();
     let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::External(parsed))
-        .inner_size(options.width.unwrap_or(480.0), options.height.unwrap_or(640.0))
+        .inner_size(
+            options.width.unwrap_or(480.0),
+            options.height.unwrap_or(640.0),
+        )
         .on_navigation(move |url| {
             let _ = nav_app.emit_to(
                 "main",
@@ -571,4 +576,132 @@ pub fn shell_close_window(app: AppHandle, id: String) -> Result<(), String> {
         .get_webview_window(&id)
         .ok_or_else(|| "window not found".to_string())?;
     window.close().map_err(|e| format!("close window: {e}"))
+}
+
+// `WebviewWindow::eval_with_callback` only serializes a completion value that
+// WebKit/WebView2 already resolved from a Promise, and on macOS an unresolved
+// Promise bridges to a null object (empty result) rather than being awaited.
+// So instead of trusting eval's own completion value, the evaluated script
+// calls back into `shell_eval_result` via `invoke` once it's actually done,
+// keyed by a request id, and this state holds the sender waiting on it.
+#[derive(Default)]
+pub struct EvalState {
+    pending: std::sync::Mutex<HashMap<String, tauri::async_runtime::Sender<String>>>,
+}
+
+// Child windows can load arbitrary remote content, and the capability that
+// lets them call back into `shell_eval_result` (necessarily) grants that to
+// any origin — so request ids need to be unguessable, not just unique, or a
+// page in one child window could spoof another window's pending eval result.
+fn random_request_id() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    hasher.write_u64(EVAL_REQUEST_COUNTER.fetch_add(1, Ordering::Relaxed));
+    format!("{:016x}", hasher.finish())
+}
+
+static EVAL_REQUEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn find_window(app: &AppHandle, id: &str) -> Result<tauri::WebviewWindow, String> {
+    app.get_webview_window(id)
+        .ok_or_else(|| "window not found".to_string())
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct EvalOutcome {
+    ok: bool,
+    value: Option<serde_json::Value>,
+    error: Option<String>,
+}
+
+// Runs `code` as the body of an async function in `window` and awaits the
+// result reported back through `shell_eval_result`. Building the function via
+// `AsyncFunction(code)` (rather than splicing `code` into the script text)
+// means a syntax error in `code` throws where it's caught below, instead of
+// breaking the surrounding script.
+async fn eval_in_window(
+    state: &EvalState,
+    window: &tauri::WebviewWindow,
+    code: &str,
+) -> Result<serde_json::Value, String> {
+    let request_id = random_request_id();
+    let (tx, mut rx) = tauri::async_runtime::channel::<String>(1);
+    state.pending.lock().unwrap().insert(request_id.clone(), tx);
+
+    let code_literal = serde_json::to_string(code).map_err(|e| format!("encode eval code: {e}"))?;
+    let request_id_literal = serde_json::to_string(&request_id).unwrap();
+    let script = format!(
+        "(function() {{ (async () => {{ \
+           let payload; \
+           try {{ \
+             const AsyncFunction = Object.getPrototypeOf(async function(){{}}).constructor; \
+             const fn = new AsyncFunction({code_literal}); \
+             payload = {{ ok: true, value: await fn() }}; \
+           }} catch (err) {{ \
+             payload = {{ ok: false, error: String(err && err.message ? err.message : err) }}; \
+           }} \
+           window.__TAURI__.core.invoke('shell_eval_result', {{ requestId: {request_id_literal}, payload: JSON.stringify(payload) }}); \
+         }})(); }})()"
+    );
+
+    if let Err(e) = window.eval(script) {
+        state.pending.lock().unwrap().remove(&request_id);
+        return Err(format!("eval: {e}"));
+    }
+
+    let raw = rx
+        .recv()
+        .await
+        .ok_or_else(|| "eval: window closed before returning a result".to_string())?;
+    let outcome: EvalOutcome =
+        serde_json::from_str(&raw).map_err(|e| format!("parse eval result: {e}"))?;
+    if outcome.ok {
+        Ok(outcome.value.unwrap_or(serde_json::Value::Null))
+    } else {
+        Err(outcome.error.unwrap_or_else(|| "eval failed".into()))
+    }
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn shell_eval_result(state: State<'_, EvalState>, request_id: String, payload: String) {
+    if let Some(tx) = state.pending.lock().unwrap().remove(&request_id) {
+        let _ = tx.try_send(payload);
+    }
+}
+
+// document.body.innerText is always a plain synchronous string, never a
+// Promise, so the WKWebView "unresolved-Promise-bridges-to-null" issue that
+// forced evalWindow onto the invoke round-trip doesn't apply here — this can
+// use eval_with_callback directly and skip the ACL-gated bridge entirely.
+#[tauri::command]
+pub async fn shell_get_window_body(app: AppHandle, id: String) -> Result<String, String> {
+    let window = find_window(&app, &id)?;
+    let (tx, mut rx) = tauri::async_runtime::channel::<String>(1);
+    window
+        .eval_with_callback(
+            "document.body ? document.body.innerText : ''",
+            move |result| {
+                let _ = tx.try_send(result);
+            },
+        )
+        .map_err(|e| format!("eval: {e}"))?;
+    let raw = rx
+        .recv()
+        .await
+        .ok_or_else(|| "eval: window closed before returning a result".to_string())?;
+    Ok(serde_json::from_str::<serde_json::Value>(&raw)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_default())
+}
+
+#[tauri::command]
+pub async fn shell_eval_window(
+    app: AppHandle,
+    state: State<'_, EvalState>,
+    id: String,
+    code: String,
+) -> Result<serde_json::Value, String> {
+    let window = find_window(&app, &id)?;
+    eval_in_window(&state, &window, &code).await
 }

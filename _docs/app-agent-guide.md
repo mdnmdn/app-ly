@@ -131,6 +131,8 @@ Available immediately on `window` before your page scripts run. Every method ret
 | `closeWindow` | `(id) → void` | Close a window opened via `openWindow` |
 | `onWindowNavigated` | `((id, url) => void) → unlisten` | Subscribe to navigation events across all child windows |
 | `onWindowClosed` | `((id) => void) → unlisten` | Subscribe to child windows closing |
+| `getWindowBody` | `(id) → string` | Get `document.body.innerText` from a child window |
+| `evalWindow` | `(id, code) → any` | Run JS in a child window (as an `async` function body) and return its result |
 
 `name`/`dbName` arguments are always simple filenames — see [path rules](#path-rules-inside-the-app-filenames-not-paths) above. Window/screen methods are rarely needed — see [below](#window-and-screen--mostly-skip-these). Child-window methods are covered [below](#child-windows--openwindow--closewindow--onwindownavigated--onwindowclosed).
 
@@ -275,7 +277,7 @@ Practice:
 
 `getWindowPosition/setWindowPosition/getWindowSize/setWindowSize/minimize/getScreens/getScreenAt` exist for apps that need to manage their own window placement (e.g. restoring a saved position, snapping to a specific monitor). All sizes/positions are **physical pixels** — divide by `scaleFactor` (from `getScreens`) if you need logical/CSS pixels. Most apps never need these; don't reach for them unless you have an actual multi-monitor or window-persistence requirement.
 
-### Child windows — `openWindow` / `closeWindow` / `onWindowNavigated` / `onWindowClosed`
+### Child windows — `openWindow` / `closeWindow` / `onWindowNavigated` / `onWindowClosed` / `getWindowBody` / `evalWindow`
 
 The main window can't navigate away to run an external flow (there's no browser chrome, and doing so would lose your app). Use a child window for that — the canonical case is an OAuth/login flow you need to drive and observe from your JS app.
 
@@ -306,7 +308,12 @@ const unlistenClosed = await shell.onWindowClosed((windowId) => {
 - `closeWindow(id)` — closes a window opened via `openWindow`. You cannot close `"main"` this way.
 - `onWindowNavigated((id, url) => ...)` — fires on every navigation in every child window, including redirects. Always filter by `id`, since multiple child windows can be open at once. Returns a promise resolving to an unlisten function — call it once you're done watching.
 - `onWindowClosed((id) => ...)` — fires when a child window closes, whether via `closeWindow` or the user closing it manually. Use it to clean up state if the user abandons the flow.
-- There's no sandboxing between a child window and your main window beyond being separate native windows — don't open untrusted URLs you wouldn't want the user pointed at outside your app either.
+- `getWindowBody(id)` — returns `document.body.innerText` from the child window as a string. Handy for scraping a status message off a page you don't control (e.g. "did the OAuth consent screen show an error?").
+- `evalWindow(id, code)` — runs `code` as an `async` function body inside the child window and returns its (JSON-serializable) result; `code` can `await` and `return` a value, and a thrown error becomes a rejected promise on the caller's side:
+  ```javascript
+  const title = await shell.evalWindow(id, "return document.title;");
+  ```
+- There's no sandboxing between a child window and your main window beyond being separate native windows — don't open untrusted URLs you wouldn't want the user pointed at outside your app either. `evalWindow` runs arbitrary JS with the same lack of sandboxing, so only point it at windows you opened yourself.
 
 ### What you get for free, unprompted
 

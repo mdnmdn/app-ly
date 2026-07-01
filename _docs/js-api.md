@@ -328,6 +328,34 @@ const unlisten = await shell.onWindowNavigated((windowId, url) => {
 });
 ```
 
+## `shell.getWindowBody(id)`
+
+Returns the `innerText` of `document.body` in a child window opened via `openWindow`. Useful for reading what an external page (e.g. a login flow) is currently showing.
+
+- `id` — the id returned by `openWindow`
+- Returns: `Promise<string>` — empty string if the window has no body yet
+
+```javascript
+const text = await shell.getWindowBody(id);
+```
+
+## `shell.evalWindow(id, code)`
+
+Runs `code` as a function body inside a child window and returns its result. `code` may use `return` and `await` — it always runs as if inside an `async` function, so a returned Promise is resolved before the result comes back to your JS.
+
+- `id` — the id returned by `openWindow`
+- `code` — JS source, executed as the body of an `async` function in the child window
+- Returns: `Promise<any>` — rejects with the thrown error's message if `code` throws
+
+```javascript
+const title = await shell.evalWindow(id, "return document.title;");
+
+const status = await shell.evalWindow(
+  id,
+  "const res = await fetch('/api/status'); return res.status;",
+);
+```
+
 ## `shell.onWindowClosed((id) => void)`
 
 Subscribes to child windows closing, whether via `closeWindow` or the user closing the window manually. Useful for cleaning up if the user abandons a flow (e.g. closes an OAuth popup without completing it).
@@ -445,6 +473,7 @@ Common cases:
 - No WebSocket or multipart helpers
 - `shell.settings` values are strings only; no nested objects, numbers, or booleans
 - `.env` parsing has no multi-line values, `\n` escapes, or variable interpolation
-- Child windows (`openWindow`) are plain webviews with no `window.shell` injected into them — they're for external content only, not a place to run more of your app's JS
+- Child windows (`openWindow`) are plain webviews with no `window.shell` injected into them — they're for external content only, not a place to run more of your app's JS. Use `getWindowBody`/`evalWindow` from the main window to read or drive them instead
+- `evalWindow` result values must be JSON-serializable (like `dbQuery`/`fetch` payloads) — functions, DOM nodes, etc. come back as `null`
 - `openFile`/`openFileLocation` resolve once the OS has been asked to open the item, not once it's actually open — a missing default app or file manager failure won't surface as a rejected promise
 - `openFileLocation` "selects" the file on macOS/Windows; on Linux it can only open the enclosing folder, not select the file within it

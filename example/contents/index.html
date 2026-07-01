@@ -40,6 +40,8 @@
       <button id="fetch">Fetch JSON</button>
       <button id="open-window">Open external window</button>
       <button id="close-window">Close external window</button>
+      <button id="window-body">Get window body</button>
+      <button id="window-eval">Eval in window</button>
     </div>
 
     <pre id="output">Ready.</pre>
@@ -114,6 +116,24 @@
           return;
         }
         await shell.closeWindow(externalWindowId);
+      });
+
+      document.getElementById("window-body").addEventListener("click", async () => {
+        if (!externalWindowId) {
+          show("No external window open");
+          return;
+        }
+        const text = await shell.getWindowBody(externalWindowId);
+        show(text);
+      });
+
+      document.getElementById("window-eval").addEventListener("click", async () => {
+        if (!externalWindowId) {
+          show("No external window open");
+          return;
+        }
+        const title = await shell.evalWindow(externalWindowId, "return document.title;");
+        show(`External window title: ${title}`);
       });
     </script>
   </body>

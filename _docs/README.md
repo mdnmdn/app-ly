@@ -68,3 +68,6 @@ app-ly/
 ├── src-tauri/            # Rust shell
 └── _docs/                # documentation
 ```
+
+For the full repo layout, per-file module responsibilities, and the checklist for adding a new
+`window.shell` method, see [`project-structure.md`](project-structure.md).

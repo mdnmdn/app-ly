@@ -50,7 +50,10 @@ Files:
 | [`src-tauri/src/paths.rs`](src-tauri/src/paths.rs) | Resolve icon, contents, data paths |
 | [`src-tauri/src/commands.rs`](src-tauri/src/commands.rs) | Invoke handlers for JS API |
 | [`src-tauri/src/db.rs`](src-tauri/src/db.rs) | SQLite query and execute handlers |
+| [`src-tauri/src/menu.rs`](src-tauri/src/menu.rs) | Native app menu (Reload, Open DevTools) |
 | [`src-tauri/src/lib.rs`](src-tauri/src/lib.rs) | App setup, `shell://` protocol, window creation, init script |
+
+See [`_docs/project-structure.md`](_docs/project-structure.md) for the full repo layout.
 
 ## JS API
 

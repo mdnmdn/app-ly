@@ -23,4 +23,14 @@ commands.allow = [
   "shell_toggle_devtools",
   "shell_open_window",
   "shell_close_window",
+  "shell_get_window_body",
+  "shell_eval_window",
 ]
+
+# Reported by a child window's own script (via window.__TAURI__.core.invoke)
+# to deliver an evalWindow/getWindowBody result back — kept separate from
+# shell-commands above so child windows don't get the full shell surface.
+[[permission]]
+identifier = "shell-eval-result"
+description = "Allows reporting an evalWindow/getWindowBody result back to the shell"
+commands.allow = ["shell_eval_result"]

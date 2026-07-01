@@ -51,6 +51,10 @@ window.shell = {
       },
     }),
   closeWindow: (id) => window.__TAURI__.core.invoke("shell_close_window", { id }),
+  getWindowBody: (id) =>
+    window.__TAURI__.core.invoke("shell_get_window_body", { id }),
+  evalWindow: (id, code) =>
+    window.__TAURI__.core.invoke("shell_eval_window", { id, code }),
   onWindowNavigated: (callback) =>
     window.__TAURI__.event.listen("shell://window-navigated", (event) =>
       callback(event.payload.id, event.payload.url),

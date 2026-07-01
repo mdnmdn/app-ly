@@ -5,11 +5,12 @@ mod menu;
 mod paths;
 
 use commands::{
-    shell_close_window, shell_delete_file, shell_fetch, shell_get_screen_at, shell_get_screens,
-    shell_get_window_position, shell_get_window_size, shell_log, shell_minimize_window,
-    shell_notify, shell_open_file, shell_open_file_location, shell_open_window, shell_read_file,
-    shell_rename_file, shell_save_file, shell_set_window_position, shell_set_window_size,
-    shell_toggle_devtools, ShellState,
+    shell_close_window, shell_delete_file, shell_eval_result, shell_eval_window, shell_fetch,
+    shell_get_screen_at, shell_get_screens, shell_get_window_body, shell_get_window_position,
+    shell_get_window_size, shell_log, shell_minimize_window, shell_notify, shell_open_file,
+    shell_open_file_location, shell_open_window, shell_read_file, shell_rename_file,
+    shell_save_file, shell_set_window_position, shell_set_window_size, shell_toggle_devtools,
+    EvalState, ShellState,
 };
 use config::{
     config_fallback_html, default_show_dev_menu, discover_config, effective_show_dev_menu,
@@ -43,7 +44,11 @@ fn load_window_icon(path: &std::path::Path) -> Result<tauri::image::Image<'stati
     let image = image::open(path).map_err(|e| format!("open icon: {e}"))?;
     let rgba = image.to_rgba8();
     let (width, height) = rgba.dimensions();
-    Ok(tauri::image::Image::new_owned(rgba.into_raw(), width, height))
+    Ok(tauri::image::Image::new_owned(
+        rgba.into_raw(),
+        width,
+        height,
+    ))
 }
 
 fn mime_for_path(path: &std::path::Path) -> &'static str {
@@ -138,8 +143,7 @@ fn fallback_data_root(app: &tauri::App) -> Result<PathBuf, String> {
         .app_data_dir()
         .map_err(|e| format!("resolve app data dir: {e}"))?;
     std::fs::create_dir_all(&data_root).map_err(|e| format!("create data dir: {e}"))?;
-    std::fs::create_dir_all(data_root.join("logs"))
-        .map_err(|e| format!("create logs dir: {e}"))?;
+    std::fs::create_dir_all(data_root.join("logs")).map_err(|e| format!("create logs dir: {e}"))?;
     Ok(data_root)
 }
 
@@ -243,6 +247,7 @@ pub fn run() {
             app.manage(ShellState {
                 data_root: plan.data_root.clone(),
             });
+            app.manage(EvalState::default());
             app.manage(ProtocolState {
                 contents_dir: plan.contents_dir.clone(),
                 fallback_html: plan.fallback_html.clone(),
@@ -255,11 +260,12 @@ pub fn run() {
 
             let (width, height) = default_inner_size(app);
 
-            let mut window_builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
-                .title(&plan.window_title)
-                .inner_size(width, height)
-                .center()
-                .initialization_script(&shell_init_script(plan.show_dev_menu, &plan.settings));
+            let mut window_builder =
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+                    .title(&plan.window_title)
+                    .inner_size(width, height)
+                    .center()
+                    .initialization_script(&shell_init_script(plan.show_dev_menu, &plan.settings));
 
             if let Some(icon_path) = &plan.icon {
                 if let Ok(icon) = load_window_icon(icon_path) {
@@ -292,7 +298,10 @@ pub fn run() {
             shell_db_execute,
             shell_toggle_devtools,
             shell_open_window,
-            shell_close_window
+            shell_close_window,
+            shell_get_window_body,
+            shell_eval_window,
+            shell_eval_result
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
