@@ -15,12 +15,39 @@ Injected into every contents page:
 | `Cmd + Shift + M` or `Cmd + Shift + I` (macOS) / `Ctrl + Shift + M` or `Ctrl + Shift + I` (others) | Toggle the native [Web Inspector](https://v2.tauri.app/develop/debug/) |
 | `Cmd + Shift + R` (macOS) / `Ctrl + Shift + R` (others) | Reload the contents page |
 | Right-click → **Inspect Element** | Open the Web Inspector |
+| `Cmd/Ctrl + X` / `+ C` / `+ V` / `+ A` | Cut / Copy / Paste / Select All, via a native **Edit** menu |
 
 The Web Inspector is available when `showDevMenu` is enabled in `app.toml` (default `true` in debug builds, `false` in release). Set `showDevMenu = true` in the external `app.toml` beside your `.app` bundle to enable the menu item and shortcuts in release.
 
 The shell calls Tauri’s `WebviewWindow::open_devtools` / `close_devtools` (via `shell_toggle_devtools`). Release builds include the `devtools` Cargo feature on `tauri`. On macOS, programmatic inspector access uses a private API and is not App Store–compatible.
 
 The same actions are in the native app menu under **View** → **Reload** / **Open DevTools** (DevTools follows `showDevMenu`).
+
+The **Edit** menu (Cut/Copy/Paste/Select All) is always present, unconditionally — it's what gives standard text inputs and `contenteditable` regions working clipboard shortcuts. Nothing to configure.
+
+## `shell.settings`
+
+A plain object (not a function — no `await` needed), available synchronously as soon as `window.shell` exists. Populated at startup from the `[settings]` table in `app.toml`, merged with a `.env` file in the same directory as `app.toml` (`.env` wins on key collisions).
+
+- All values are strings, same as OS environment variables — parse yourself if you need numbers/booleans.
+- Read-only; there is no setter. It reflects `app.toml`/`.env` at process start, not live state.
+
+```toml
+# app.toml
+[settings]
+apiBaseUrl = "https://api.example.com"
+```
+
+```
+# .env, next to app.toml
+apiBaseUrl = "https://staging.api.example.com"
+```
+
+```javascript
+console.log(shell.settings.apiBaseUrl); // "https://staging.api.example.com"
+```
+
+`.env` parsing supports `KEY=VALUE` lines, blank lines, `#` comments, an optional `export ` prefix, and matching `'single'` or `"double"` quotes around the value. No multi-line values, no `\n` escape sequences, no variable interpolation.
 
 ## `shell.saveFile(name, contents)`
 
@@ -44,6 +71,51 @@ Reads a text file from `dataPath`.
 ```javascript
 const raw = await shell.readFile("settings.json");
 const settings = JSON.parse(raw);
+```
+
+## `shell.deleteFile(name)`
+
+Deletes a file from `dataPath`.
+
+- `name` — simple filename only
+- Returns: `Promise<void>` — rejects if the file doesn't exist
+
+```javascript
+await shell.deleteFile("old-export.csv");
+```
+
+## `shell.renameFile(name, newName)`
+
+Renames/moves a file within `dataPath` (both names are simple filenames, so this cannot move a file outside `dataPath`).
+
+- `name` — current simple filename
+- `newName` — new simple filename
+- Returns: `Promise<void>` — rejects if `name` doesn't exist or `newName` is invalid
+
+```javascript
+await shell.renameFile("draft.csv", "report-2024-01-01.csv");
+```
+
+## `shell.openFile(name)`
+
+Opens a file in `dataPath` with the OS's default application for its type (e.g. a `.csv` opens in the default spreadsheet app). Use this to back a "view file" link in your UI.
+
+- `name` — simple filename only
+- Returns: `Promise<void>` — rejects if the file doesn't exist; resolves once the OS has been asked to open it (doesn't wait for the other app to launch)
+
+```javascript
+await shell.openFile("report.csv");
+```
+
+## `shell.openFileLocation(name)`
+
+Reveals a file in the OS's file manager (Finder/Explorer), selecting it. On Linux, where there's no universal "select in file manager" action, this opens the enclosing folder instead. Use this to back an "open containing folder" link in your UI.
+
+- `name` — simple filename only
+- Returns: `Promise<void>` — rejects if the file doesn't exist
+
+```javascript
+await shell.openFileLocation("report.csv");
 ```
 
 ## `shell.log(message, level?)`
@@ -209,6 +281,65 @@ Returns the display that contains a point in physical screen coordinates.
 const screen = await shell.getScreenAt(1200, 400);
 ```
 
+## `shell.openWindow(url, options?)`
+
+Opens a new child webview window — for flows the main window can't run itself, e.g. an external OAuth/login page you need to observe and drive.
+
+- `url` — `http://` or `https://` URL only, same rule as `fetch`
+- `options` — optional object:
+  - `title` — window title (default: platform default, untitled)
+  - `width` — logical pixel width (default `480`)
+  - `height` — logical pixel height (default `640`)
+- Returns: `Promise<{ id: string }>` — `id` is an internal window label, not a DOM handle
+
+```javascript
+const { id } = await shell.openWindow("https://accounts.example.com/oauth/authorize?...", {
+  title: "Sign in",
+  width: 480,
+  height: 640,
+});
+```
+
+## `shell.closeWindow(id)`
+
+Closes a window previously opened with `openWindow`.
+
+- `id` — the id returned by `openWindow`; `"main"` is rejected
+- Returns: `Promise<void>`
+
+```javascript
+await shell.closeWindow(id);
+```
+
+## `shell.onWindowNavigated((id, url) => void)`
+
+Subscribes to navigation events from every child window opened via `openWindow` (including redirects). Fires for all child windows — filter by `id` yourself.
+
+- Returns: `Promise<UnlistenFn>` — call the resolved function to stop listening
+
+```javascript
+const unlisten = await shell.onWindowNavigated((windowId, url) => {
+  if (windowId !== id) return;
+  if (url.startsWith("https://yourapp.example.com/callback")) {
+    const code = new URL(url).searchParams.get("code");
+    shell.closeWindow(id);
+    unlisten();
+  }
+});
+```
+
+## `shell.onWindowClosed((id) => void)`
+
+Subscribes to child windows closing, whether via `closeWindow` or the user closing the window manually. Useful for cleaning up if the user abandons a flow (e.g. closes an OAuth popup without completing it).
+
+- Returns: `Promise<UnlistenFn>` — call the resolved function to stop listening
+
+```javascript
+const unlisten = await shell.onWindowClosed((windowId) => {
+  if (windowId === id) unlisten();
+});
+```
+
 ## `shell.dbQuery(dbName, query, params?)`
 
 Runs a read query against a SQLite database stored in `dataPath`. The database file is created on first use if it does not exist.
@@ -269,11 +400,13 @@ All methods return promises that reject with a string error message on failure.
 Common cases:
 
 - Invalid filename (contains `/`, `\\`, or `..`)
-- Missing file on `readFile`
-- Unsupported URL scheme in `fetch`
+- Missing file on `readFile`, `deleteFile`, `renameFile`, `openFile`, `openFileLocation`
+- Unsupported URL scheme in `fetch` or `openWindow` (only `http`/`https` allowed)
 - Network failure in `fetch`
 - Invalid database name or SQL error in `dbQuery` / `dbExecute`
 - Window not available yet when calling window APIs during very early page load
+- Unknown window `id`, or `id: "main"`, passed to `closeWindow`
+- The platform opener binary is missing (e.g. `xdg-open` not installed) in `openFile`/`openFileLocation`
 
 ## Full example
 
@@ -310,3 +443,8 @@ Common cases:
 - SQLite parameter values support `null`, boolean, number, and string only
 - SQLite blob columns are returned as `null` in `dbQuery`
 - No WebSocket or multipart helpers
+- `shell.settings` values are strings only; no nested objects, numbers, or booleans
+- `.env` parsing has no multi-line values, `\n` escapes, or variable interpolation
+- Child windows (`openWindow`) are plain webviews with no `window.shell` injected into them — they're for external content only, not a place to run more of your app's JS
+- `openFile`/`openFileLocation` resolve once the OS has been asked to open the item, not once it's actually open — a missing default app or file manager failure won't surface as a rejected promise
+- `openFileLocation` "selects" the file on macOS/Windows; on Linux it can only open the enclosing folder, not select the file within it

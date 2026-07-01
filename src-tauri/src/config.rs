@@ -1,5 +1,6 @@
 use crate::paths::deploy_folder;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tauri::path::BaseDirectory;
 use tauri::{App, Manager};
@@ -13,6 +14,8 @@ pub struct ShellConfig {
     pub data_path: String,
     #[serde(rename = "showDevMenu", default)]
     pub show_dev_menu: Option<bool>,
+    #[serde(default)]
+    pub settings: Option<HashMap<String, String>>,
 }
 
 pub fn default_show_dev_menu() -> bool {
@@ -28,6 +31,42 @@ impl ShellConfig {
         let text = std::fs::read_to_string(path).map_err(|e| format!("read config: {e}"))?;
         toml::from_str(&text).map_err(|e| format!("parse config: {e}"))
     }
+}
+
+/// `KEY=VALUE` lines only — no multi-line values, no `\n`-style escapes.
+/// Good enough for the local-secrets use case `.env` exists for; reach for a
+/// real dotenv crate if you need more.
+fn parse_dotenv(text: &str) -> HashMap<String, String> {
+    let mut values = HashMap::new();
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let line = line.strip_prefix("export ").unwrap_or(line);
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let mut value = value.trim();
+        if value.len() >= 2
+            && ((value.starts_with('"') && value.ends_with('"'))
+                || (value.starts_with('\'') && value.ends_with('\'')))
+        {
+            value = &value[1..value.len() - 1];
+        }
+        values.insert(key.trim().to_string(), value.to_string());
+    }
+    values
+}
+
+/// Merges `[settings]` from `app.toml` with a `.env` file beside it, if present.
+/// `.env` wins on key collisions — it's the local-override layer.
+pub fn load_settings(config: &ShellConfig, config_dir: &Path) -> HashMap<String, String> {
+    let mut settings = config.settings.clone().unwrap_or_default();
+    if let Ok(text) = std::fs::read_to_string(config_dir.join(".env")) {
+        settings.extend(parse_dotenv(&text));
+    }
+    settings
 }
 
 #[derive(Debug, Clone)]
@@ -283,4 +322,28 @@ pub fn discover_config(app: &App) -> Result<ConfigDiscovery, DiscoverError> {
     }
 
     try_dev_fallback(&mut searched).map_err(DiscoverError::Failed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_dotenv;
+
+    #[test]
+    fn parses_dotenv_lines() {
+        let text = "\
+# comment
+export FOO=bar
+BAZ = \"quoted value\"
+SINGLE='also quoted'
+EMPTY=
+
+MALFORMED_LINE_NO_EQUALS
+";
+        let values = parse_dotenv(text);
+        assert_eq!(values.get("FOO").map(String::as_str), Some("bar"));
+        assert_eq!(values.get("BAZ").map(String::as_str), Some("quoted value"));
+        assert_eq!(values.get("SINGLE").map(String::as_str), Some("also quoted"));
+        assert_eq!(values.get("EMPTY").map(String::as_str), Some(""));
+        assert_eq!(values.len(), 4);
+    }
 }

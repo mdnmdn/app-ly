@@ -5,25 +5,29 @@ mod menu;
 mod paths;
 
 use commands::{
-    shell_fetch, shell_get_screen_at, shell_get_screens, shell_get_window_position,
-    shell_get_window_size, shell_log, shell_minimize_window, shell_notify, shell_read_file,
-    shell_save_file, shell_set_window_position, shell_set_window_size, shell_toggle_devtools,
-    ShellState,
+    shell_close_window, shell_delete_file, shell_fetch, shell_get_screen_at, shell_get_screens,
+    shell_get_window_position, shell_get_window_size, shell_log, shell_minimize_window,
+    shell_notify, shell_open_file, shell_open_file_location, shell_open_window, shell_read_file,
+    shell_rename_file, shell_save_file, shell_set_window_position, shell_set_window_size,
+    shell_toggle_devtools, ShellState,
 };
 use config::{
     config_fallback_html, default_show_dev_menu, discover_config, effective_show_dev_menu,
-    missing_config_message, DiscoverError,
+    load_settings, missing_config_message, DiscoverError,
 };
 use db::{shell_db_execute, shell_db_query};
 use http::{header::CONTENT_TYPE, Response, StatusCode};
 use paths::resolve_paths;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 
-fn shell_init_script(show_dev_menu: bool) -> String {
+fn shell_init_script(show_dev_menu: bool, settings: &HashMap<String, String>) -> String {
+    let settings_json = serde_json::to_string(settings).unwrap_or_else(|_| "{}".into());
     format!(
-        "window.__SHELL_DEV__ = {};\n{}\n{}",
+        "window.__SHELL_DEV__ = {};\nwindow.__SHELL_SETTINGS__ = {};\n{}\n{}",
         show_dev_menu,
+        settings_json,
         include_str!("../scripts/shell-api.js"),
         include_str!("../scripts/shell-shortcuts.js"),
     )
@@ -125,6 +129,7 @@ struct StartupPlan {
     contents_dir: PathBuf,
     fallback_html: Option<String>,
     show_dev_menu: bool,
+    settings: HashMap<String, String>,
 }
 
 fn fallback_data_root(app: &tauri::App) -> Result<PathBuf, String> {
@@ -152,6 +157,7 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
                 contents_dir: PathBuf::from("."),
                 fallback_html: Some(config_fallback_html("Missing app.toml", &message)),
                 show_dev_menu: default_show_dev_menu(),
+                settings: HashMap::new(),
             });
         }
         Err(DiscoverError::Failed(message)) => {
@@ -164,6 +170,7 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
                 contents_dir: PathBuf::from("."),
                 fallback_html: Some(config_fallback_html("Config error", &message)),
                 show_dev_menu: default_show_dev_menu(),
+                settings: HashMap::new(),
             });
         }
     };
@@ -182,9 +189,12 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
                 contents_dir: PathBuf::from("."),
                 fallback_html: Some(config_fallback_html("Config error", &message)),
                 show_dev_menu,
+                settings: HashMap::new(),
             });
         }
     };
+
+    let settings = load_settings(&discovery.config, &discovery.config_dir);
 
     Ok(StartupPlan {
         window_title: discovery.config.name,
@@ -198,6 +208,7 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
         contents_dir: resolved.contents_dir,
         fallback_html: None,
         show_dev_menu,
+        settings,
     })
 }
 
@@ -248,7 +259,7 @@ pub fn run() {
                 .title(&plan.window_title)
                 .inner_size(width, height)
                 .center()
-                .initialization_script(&shell_init_script(plan.show_dev_menu));
+                .initialization_script(&shell_init_script(plan.show_dev_menu, &plan.settings));
 
             if let Some(icon_path) = &plan.icon {
                 if let Ok(icon) = load_window_icon(icon_path) {
@@ -263,6 +274,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             shell_save_file,
             shell_read_file,
+            shell_delete_file,
+            shell_rename_file,
+            shell_open_file,
+            shell_open_file_location,
             shell_log,
             shell_notify,
             shell_fetch,
@@ -275,7 +290,9 @@ pub fn run() {
             shell_get_screen_at,
             shell_db_query,
             shell_db_execute,
-            shell_toggle_devtools
+            shell_toggle_devtools,
+            shell_open_window,
+            shell_close_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

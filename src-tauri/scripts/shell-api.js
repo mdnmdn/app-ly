@@ -1,7 +1,14 @@
 window.shell = {
+  settings: window.__SHELL_SETTINGS__ || {},
   saveFile: (name, contents) =>
     window.__TAURI__.core.invoke("shell_save_file", { name, contents }),
   readFile: (name) => window.__TAURI__.core.invoke("shell_read_file", { name }),
+  deleteFile: (name) => window.__TAURI__.core.invoke("shell_delete_file", { name }),
+  renameFile: (name, newName) =>
+    window.__TAURI__.core.invoke("shell_rename_file", { name, newName }),
+  openFile: (name) => window.__TAURI__.core.invoke("shell_open_file", { name }),
+  openFileLocation: (name) =>
+    window.__TAURI__.core.invoke("shell_open_file_location", { name }),
   log: (message, level) =>
     window.__TAURI__.core.invoke("shell_log", {
       message,
@@ -34,4 +41,22 @@ window.shell = {
   getScreens: () => window.__TAURI__.core.invoke("shell_get_screens"),
   getScreenAt: (x, y) =>
     window.__TAURI__.core.invoke("shell_get_screen_at", { x, y }),
+  openWindow: (url, options = {}) =>
+    window.__TAURI__.core.invoke("shell_open_window", {
+      url,
+      options: {
+        title: options.title,
+        width: options.width,
+        height: options.height,
+      },
+    }),
+  closeWindow: (id) => window.__TAURI__.core.invoke("shell_close_window", { id }),
+  onWindowNavigated: (callback) =>
+    window.__TAURI__.event.listen("shell://window-navigated", (event) =>
+      callback(event.payload.id, event.payload.url),
+    ),
+  onWindowClosed: (callback) =>
+    window.__TAURI__.event.listen("shell://window-closed", (event) =>
+      callback(event.payload.id),
+    ),
 };

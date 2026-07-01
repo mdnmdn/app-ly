@@ -1,11 +1,15 @@
 use chrono::Local;
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
-use tauri::{AppHandle, Manager, Monitor, PhysicalPosition, PhysicalSize, State};
+use std::sync::atomic::{AtomicU64, Ordering};
+use tauri::{
+    AppHandle, Emitter, Manager, Monitor, PhysicalPosition, PhysicalSize, State, Url, WebviewUrl,
+    WebviewWindowBuilder, WindowEvent,
+};
 use tauri_plugin_notification::NotificationExt;
 
 #[derive(Clone)]
@@ -48,6 +52,109 @@ pub fn shell_save_file(
 pub fn shell_read_file(state: State<'_, ShellState>, name: String) -> Result<String, String> {
     let path = data_file_path(&state, &name)?;
     std::fs::read_to_string(path).map_err(|e| format!("read file: {e}"))
+}
+
+#[tauri::command]
+pub fn shell_delete_file(state: State<'_, ShellState>, name: String) -> Result<(), String> {
+    let path = data_file_path(&state, &name)?;
+    std::fs::remove_file(path).map_err(|e| format!("delete file: {e}"))
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn shell_rename_file(
+    state: State<'_, ShellState>,
+    name: String,
+    new_name: String,
+) -> Result<(), String> {
+    let from = data_file_path(&state, &name)?;
+    let to = data_file_path(&state, &new_name)?;
+    std::fs::rename(from, to).map_err(|e| format!("rename file: {e}"))
+}
+
+fn require_exists(path: &std::path::Path) -> Result<(), String> {
+    if path.exists() {
+        Ok(())
+    } else {
+        Err("file not found".into())
+    }
+}
+
+/// "Open"/"reveal" have no cross-platform API in std — shell out to each
+/// platform's own file-opener rather than pull in a plugin for two verbs.
+
+#[cfg(target_os = "macos")]
+fn open_path(path: &std::path::Path) -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg(path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("open file: {e}"))
+}
+
+#[cfg(target_os = "macos")]
+fn reveal_path(path: &std::path::Path) -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg("-R")
+        .arg(path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("reveal file: {e}"))
+}
+
+#[cfg(target_os = "windows")]
+fn open_path(path: &std::path::Path) -> Result<(), String> {
+    std::process::Command::new("cmd")
+        .args(["/C", "start", ""])
+        .arg(path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("open file: {e}"))
+}
+
+#[cfg(target_os = "windows")]
+fn reveal_path(path: &std::path::Path) -> Result<(), String> {
+    std::process::Command::new("explorer")
+        .arg(format!("/select,{}", path.display()))
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("reveal file: {e}"))
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn open_path(path: &std::path::Path) -> Result<(), String> {
+    std::process::Command::new("xdg-open")
+        .arg(path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("open file: {e}"))
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn reveal_path(path: &std::path::Path) -> Result<(), String> {
+    // No universal "select in file manager" verb on Linux; open the enclosing folder instead.
+    let dir = path.parent().unwrap_or(path);
+    std::process::Command::new("xdg-open")
+        .arg(dir)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("reveal file: {e}"))
+}
+
+#[tauri::command]
+pub fn shell_open_file(state: State<'_, ShellState>, name: String) -> Result<(), String> {
+    let path = data_file_path(&state, &name)?;
+    require_exists(&path)?;
+    open_path(&path)
+}
+
+#[tauri::command]
+pub fn shell_open_file_location(
+    state: State<'_, ShellState>,
+    name: String,
+) -> Result<(), String> {
+    let path = data_file_path(&state, &name)?;
+    require_exists(&path)?;
+    reveal_path(&path)
 }
 
 #[tauri::command]
@@ -365,4 +472,103 @@ pub fn shell_toggle_devtools(app: AppHandle) -> Result<(), String> {
         window.open_devtools();
     }
     Ok(())
+}
+
+static CHILD_WINDOW_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Debug, Deserialize)]
+pub struct OpenWindowOptions {
+    pub title: Option<String>,
+    pub width: Option<f64>,
+    pub height: Option<f64>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OpenedWindow {
+    pub id: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct WindowNavigatedPayload {
+    id: String,
+    url: String,
+}
+
+#[derive(Debug, Serialize, Clone)]
+struct WindowClosedPayload {
+    id: String,
+}
+
+/// Child windows are for things a `<a target="_blank">` can't do here (CSP blocks
+/// navigating the main window away, and there's no browser chrome to pop up) —
+/// namely external OAuth/auth flows the JS app needs to watch and drive.
+#[tauri::command]
+pub fn shell_open_window(
+    app: AppHandle,
+    url: String,
+    options: Option<OpenWindowOptions>,
+) -> Result<OpenedWindow, String> {
+    let parsed = Url::parse(&url).map_err(|e| format!("invalid url: {e}"))?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err("only http and https URLs are allowed".into());
+    }
+
+    let options = options.unwrap_or(OpenWindowOptions {
+        title: None,
+        width: None,
+        height: None,
+    });
+    let label = format!(
+        "shell-window-{}",
+        CHILD_WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed)
+    );
+
+    let nav_app = app.clone();
+    let nav_label = label.clone();
+    let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::External(parsed))
+        .inner_size(options.width.unwrap_or(480.0), options.height.unwrap_or(640.0))
+        .on_navigation(move |url| {
+            let _ = nav_app.emit_to(
+                "main",
+                "shell://window-navigated",
+                WindowNavigatedPayload {
+                    id: nav_label.clone(),
+                    url: url.to_string(),
+                },
+            );
+            true
+        });
+
+    if let Some(title) = &options.title {
+        builder = builder.title(title);
+    }
+
+    let window = builder.build().map_err(|e| format!("open window: {e}"))?;
+
+    let closed_app = app.clone();
+    let closed_label = label.clone();
+    window.on_window_event(move |event| {
+        if matches!(event, WindowEvent::Destroyed) {
+            let _ = closed_app.emit_to(
+                "main",
+                "shell://window-closed",
+                WindowClosedPayload {
+                    id: closed_label.clone(),
+                },
+            );
+        }
+    });
+
+    Ok(OpenedWindow { id: label })
+}
+
+#[tauri::command]
+pub fn shell_close_window(app: AppHandle, id: String) -> Result<(), String> {
+    if id == "main" {
+        return Err("cannot close the main window".into());
+    }
+    let window = app
+        .get_webview_window(&id)
+        .ok_or_else(|| "window not found".to_string())?;
+    window.close().map_err(|e| format!("close window: {e}"))
 }

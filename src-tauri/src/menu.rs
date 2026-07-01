@@ -19,6 +19,14 @@ pub fn setup_app_menu(
     )
     .map_err(|e| format!("create reload menu item: {e}"))?;
 
+    let edit_submenu = SubmenuBuilder::new(app, "Edit")
+        .cut()
+        .copy()
+        .paste()
+        .select_all()
+        .build()
+        .map_err(|e| format!("build edit menu: {e}"))?;
+
     let view_submenu = {
         let mut builder = SubmenuBuilder::new(app, "View").item(&reload);
 
@@ -46,6 +54,7 @@ pub fn setup_app_menu(
 
     let menu = MenuBuilder::new(app)
         .item(&app_submenu)
+        .item(&edit_submenu)
         .item(&view_submenu)
         .build()
         .map_err(|e| format!("build app menu bar: {e}"))?;

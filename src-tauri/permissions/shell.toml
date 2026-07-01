@@ -4,6 +4,10 @@ description = "Shell container invoke commands"
 commands.allow = [
   "shell_save_file",
   "shell_read_file",
+  "shell_delete_file",
+  "shell_rename_file",
+  "shell_open_file",
+  "shell_open_file_location",
   "shell_log",
   "shell_notify",
   "shell_fetch",
@@ -17,4 +21,6 @@ commands.allow = [
   "shell_db_query",
   "shell_db_execute",
   "shell_toggle_devtools",
+  "shell_open_window",
+  "shell_close_window",
 ]

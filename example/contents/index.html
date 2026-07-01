@@ -38,6 +38,8 @@
       <button id="load">Load note</button>
       <button id="notify">Notify</button>
       <button id="fetch">Fetch JSON</button>
+      <button id="open-window">Open external window</button>
+      <button id="close-window">Close external window</button>
     </div>
 
     <pre id="output">Ready.</pre>
@@ -75,6 +77,43 @@
           "https://jsonplaceholder.typicode.com/todos/1",
         );
         show(response);
+      });
+
+      // Child windows are for flows this window can't run itself, e.g. an
+      // external OAuth/login page you need to observe and drive from JS.
+      let externalWindowId = null;
+      let unlistenNav = null;
+      let unlistenClosed = null;
+
+      document.getElementById("open-window").addEventListener("click", async () => {
+        const { id } = await shell.openWindow("https://example.com", {
+          title: "External window example",
+          width: 480,
+          height: 640,
+        });
+        externalWindowId = id;
+        show(`Opened external window: ${id}`);
+
+        unlistenNav = await shell.onWindowNavigated((windowId, url) => {
+          if (windowId !== externalWindowId) return;
+          show(`External window navigated to: ${url}`);
+        });
+
+        unlistenClosed = await shell.onWindowClosed((windowId) => {
+          if (windowId !== externalWindowId) return;
+          show("External window closed");
+          externalWindowId = null;
+          if (unlistenNav) unlistenNav();
+          if (unlistenClosed) unlistenClosed();
+        });
+      });
+
+      document.getElementById("close-window").addEventListener("click", async () => {
+        if (!externalWindowId) {
+          show("No external window open");
+          return;
+        }
+        await shell.closeWindow(externalWindowId);
       });
     </script>
   </body>

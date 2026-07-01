@@ -7,3 +7,9 @@ name = "My App"
 contents = "contents/index.html"
 dataPath = "data"
 showDevMenu = true  # optional; default true in debug, false in release
+
+# optional; string-only key/value map, exposed to contents HTML as `shell.settings`.
+# A `.env` file next to this app.toml (KEY=VALUE per line) is merged on top and
+# wins on conflicts — keep secrets/local overrides there instead of in this file.
+[settings]
+apiBaseUrl = "https://api.example.com"
