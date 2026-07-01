@@ -1,0 +1,9 @@
+# Paths are relative to the directory containing this file.
+# In release builds, icon/contents come from bundled resources;
+# dataPath is stored under the app data directory.
+
+icon = "icon.png"
+name = "My App"
+contents = "contents/index.html"
+dataPath = "data"
+showDevMenu = true  # optional; default true in debug, false in release

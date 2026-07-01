@@ -1,0 +1,4 @@
+icon = "example/icon.png"
+name = "Shell Example"
+contents = "example/contents/index.html"
+dataPath = "example/data"

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shell Example</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+
+      body {
+        margin: 2rem auto;
+        max-width: 40rem;
+        line-height: 1.5;
+      }
+
+      button {
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+      }
+
+      pre {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        background: rgba(127, 127, 127, 0.15);
+        overflow-x: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>app-ly shell</h1>
+    <p>This page is loaded from the configured <code>contents</code> path.</p>
+
+    <div>
+      <button id="save">Save note</button>
+      <button id="load">Load note</button>
+      <button id="notify">Notify</button>
+      <button id="fetch">Fetch JSON</button>
+    </div>
+
+    <pre id="output">Ready.</pre>
+
+    <script>
+      const output = document.getElementById("output");
+
+      function show(value) {
+        output.textContent =
+          typeof value === "string" ? value : JSON.stringify(value, null, 2);
+      }
+
+      document.getElementById("save").addEventListener("click", async () => {
+        await shell.saveFile("note.txt", `Saved at ${new Date().toISOString()}`);
+        await shell.log("saved note.txt");
+        show("Saved note.txt");
+      });
+
+      document.getElementById("load").addEventListener("click", async () => {
+        try {
+          const text = await shell.readFile("note.txt");
+          show(text);
+        } catch (error) {
+          show(String(error));
+        }
+      });
+
+      document.getElementById("notify").addEventListener("click", async () => {
+        await shell.notify("Shell Example", "Notification from contents HTML");
+        show("Notification sent.");
+      });
+
+      document.getElementById("fetch").addEventListener("click", async () => {
+        const response = await shell.get(
+          "https://jsonplaceholder.typicode.com/todos/1",
+        );
+        show(response);
+      });
+    </script>
+  </body>
+</html>
