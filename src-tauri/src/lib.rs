@@ -5,7 +5,7 @@ mod menu;
 mod paths;
 
 use commands::{
-    shell_close_window, shell_delete_file, shell_eval_result, shell_eval_window, shell_fetch,
+    shell_auth_via_browser, shell_close_window, shell_delete_file, shell_eval_result, shell_eval_window, shell_fetch,
     shell_get_screen_at, shell_get_screens, shell_get_window_body, shell_get_window_position,
     shell_get_window_size, shell_log, shell_minimize_window, shell_notify, shell_open_file,
     shell_open_file_location, shell_open_window, shell_read_file, shell_rename_file,
@@ -231,7 +231,7 @@ fn default_inner_size(app: &tauri::App) -> (f64, f64) {
 }
 
 fn create_builder() -> tauri::Builder<tauri::Wry> {
-    tauri::Builder::default().plugin(tauri_plugin_notification::init())
+    tauri::Builder::default()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -301,7 +301,8 @@ pub fn run() {
             shell_close_window,
             shell_get_window_body,
             shell_eval_window,
-            shell_eval_result
+            shell_eval_result,
+            shell_auth_via_browser
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

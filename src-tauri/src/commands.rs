@@ -10,7 +10,7 @@ use tauri::{
     AppHandle, Emitter, Manager, Monitor, PhysicalPosition, PhysicalSize, State, Url, WebviewUrl,
     WebviewWindowBuilder, WindowEvent,
 };
-use tauri_plugin_notification::NotificationExt;
+use tauri::webview::PageLoadEvent;
 
 #[derive(Clone)]
 pub struct ShellState {
@@ -179,12 +179,12 @@ pub fn shell_log(
 }
 
 #[tauri::command]
-pub fn shell_notify(app: AppHandle, title: String, body: String) -> Result<(), String> {
-    app.notification()
-        .builder()
-        .title(title)
-        .body(body)
+pub fn shell_notify(title: String, body: String) -> Result<(), String> {
+    notify_rust::Notification::new()
+        .summary(&title)
+        .body(&body)
         .show()
+        .map(|_| ())
         .map_err(|e| format!("notify: {e}"))
 }
 
@@ -548,6 +548,21 @@ pub fn shell_open_window(
         builder = builder.title(title);
     }
 
+    let load_app = app.clone();
+    let load_label = label.clone();
+    builder = builder.on_page_load(move |_window, payload| {
+        if payload.event() == PageLoadEvent::Finished {
+            let _ = load_app.emit_to(
+                "main",
+                "shell://window-loaded",
+                WindowNavigatedPayload {
+                    id: load_label.clone(),
+                    url: payload.url().to_string(),
+                },
+            );
+        }
+    });
+
     let window = builder.build().map_err(|e| format!("open window: {e}"))?;
 
     let closed_app = app.clone();
@@ -704,4 +719,181 @@ pub async fn shell_eval_window(
 ) -> Result<serde_json::Value, String> {
     let window = find_window(&app, &id)?;
     eval_in_window(&state, &window, &code).await
+}
+
+fn percent_encode_return_url(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(byte as char);
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
+fn write_auth_callback_response(stream: &mut std::net::TcpStream) {
+    let body = "<!DOCTYPE html><html><body><p>Sign-in complete. You can close this tab and return to the desktop app.</p></body></html>";
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    let _ = stream.write_all(response.as_bytes());
+    let _ = stream.flush();
+}
+
+fn parse_auth_code_from_http(stream: &mut std::net::TcpStream) -> Result<Option<String>, String> {
+    use std::io::Read;
+
+    let mut buffer = [0u8; 4096];
+    let read = stream
+        .read(&mut buffer)
+        .map_err(|e| format!("read callback request: {e}"))?;
+    if read == 0 {
+        return Ok(None);
+    }
+
+    let request = String::from_utf8_lossy(&buffer[..read]);
+    let request_line = request.lines().next().unwrap_or_default();
+    let mut parts = request_line.split_whitespace();
+    let _method = parts.next();
+    let target = parts.next().unwrap_or_default();
+    let path = target.split('#').next().unwrap_or(target);
+    let query = path.split_once('?').map(|(_, q)| q).unwrap_or_default();
+
+    let mut auth_code = None;
+    let mut error = None;
+    for pair in query.split('&') {
+        let Some((key, value)) = pair.split_once('=') else {
+            continue;
+        };
+        if key == "authCode" && !value.is_empty() {
+            auth_code = Some(value.to_string());
+        } else if key == "error" && !value.is_empty() {
+            error = Some(value.to_string());
+        }
+    }
+
+    write_auth_callback_response(stream);
+
+    if let Some(err) = error {
+        return Err(format!("authentication error: {err}"));
+    }
+
+    Ok(auth_code)
+}
+
+fn is_loopback_callback_host(host: &str) -> bool {
+    host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "[::1]" || host == "::1"
+}
+
+fn bind_host_for_callback(host: &str) -> &str {
+    if host == "[::1]" || host == "::1" {
+        "[::1]"
+    } else {
+        "127.0.0.1"
+    }
+}
+
+fn resolve_auth_callback(return_url: Option<String>) -> Result<(std::net::TcpListener, String), String> {
+    use std::net::TcpListener;
+
+    let return_url = match return_url {
+        Some(url) if !url.trim().is_empty() => url.trim().to_string(),
+        _ => {
+            let listener = TcpListener::bind("127.0.0.1:0")
+                .map_err(|e| format!("bind callback listener: {e}"))?;
+            let port = listener
+                .local_addr()
+                .map_err(|e| format!("callback listener addr: {e}"))?
+                .port();
+            return Ok((listener, format!("http://127.0.0.1:{port}/callback")));
+        }
+    };
+
+    let parsed = Url::parse(&return_url).map_err(|e| format!("invalid returnUrl: {e}"))?;
+    if parsed.scheme() != "http" {
+        return Err("returnUrl must use http".into());
+    }
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| "returnUrl must include a host".to_string())?;
+    if !is_loopback_callback_host(host) {
+        return Err("returnUrl host must be localhost or 127.0.0.1".into());
+    }
+    let port = parsed
+        .port()
+        .ok_or_else(|| "returnUrl must include an explicit port".to_string())?;
+    if port == 0 {
+        return Err("returnUrl port cannot be 0".into());
+    }
+
+    let bind_addr = format!("{}:{port}", bind_host_for_callback(host));
+    let listener = TcpListener::bind(&bind_addr).map_err(|e| {
+        format!("bind callback listener on {bind_addr} (returnUrl={return_url}): {e}")
+    })?;
+
+    Ok((listener, return_url))
+}
+
+fn auth_via_browser_blocking(
+    auth_url: &str,
+    timeout_ms: u64,
+    return_url: Option<String>,
+) -> Result<String, String> {
+    use std::time::{Duration, Instant};
+
+    let (listener, return_url) = resolve_auth_callback(return_url)?;
+    listener
+        .set_nonblocking(true)
+        .map_err(|e| format!("callback listener nonblocking: {e}"))?;
+
+    let sep = if auth_url.contains('?') { '&' } else { '?' };
+    let browser_url = format!(
+        "{auth_url}{sep}returnUrl={}",
+        percent_encode_return_url(&return_url)
+    );
+
+    open::that(&browser_url).map_err(|e| format!("open browser: {e}"))?;
+
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    loop {
+        if Instant::now() >= deadline {
+            return Err("authentication timed out waiting for browser callback".into());
+        }
+
+        match listener.accept() {
+            Ok((mut stream, _)) => {
+                let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+                let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
+                match parse_auth_code_from_http(&mut stream)? {
+                    Some(code) => return Ok(code),
+                    None => continue,
+                }
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(err) => return Err(format!("callback accept: {err}")),
+        }
+    }
+}
+
+/// Opens the system browser for SAML auth and waits for the backend redirect to a
+/// transient loopback listener. Returns the one-time authCode for token exchange.
+#[tauri::command(rename_all = "camelCase")]
+pub async fn shell_auth_via_browser(
+    auth_url: String,
+    timeout_ms: Option<u64>,
+    return_url: Option<String>,
+) -> Result<String, String> {
+    let timeout = timeout_ms.unwrap_or(120_000);
+    tauri::async_runtime::spawn_blocking(move || {
+        auth_via_browser_blocking(&auth_url, timeout, return_url)
+    })
+    .await
+    .map_err(|e| format!("auth browser task: {e}"))?
 }

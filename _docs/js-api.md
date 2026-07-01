@@ -328,6 +328,19 @@ const unlisten = await shell.onWindowNavigated((windowId, url) => {
 });
 ```
 
+## `shell.onWindowLoaded((id, url) => void)`
+
+Subscribes to page-load-finished events from every child window opened via `openWindow`. Unlike `onWindowNavigated` (which fires as navigation starts/redirects), this fires once the page has actually finished loading — useful when you need the DOM settled before calling `getWindowBody`/`evalWindow`.
+
+- Returns: `Promise<UnlistenFn>` — call the resolved function to stop listening
+
+```javascript
+const unlisten = await shell.onWindowLoaded((windowId, url) => {
+  if (windowId !== id) return;
+  console.log("child window finished loading", url);
+});
+```
+
 ## `shell.getWindowBody(id)`
 
 Returns the `innerText` of `document.body` in a child window opened via `openWindow`. Useful for reading what an external page (e.g. a login flow) is currently showing.
@@ -367,6 +380,45 @@ const unlisten = await shell.onWindowClosed((windowId) => {
   if (windowId === id) unlisten();
 });
 ```
+
+## `shell.authViaBrowser(authUrl, options?)`
+
+Runs a browser-based sign-in flow (e.g. SAML/SSO) in the user's **system** default browser instead of a child webview, then waits for the backend to redirect back to a one-time local HTTP callback and returns the resulting auth code. Use this instead of `openWindow` + `onWindowNavigated` when the identity provider blocks embedded webviews (common for SSO/SAML providers).
+
+- `authUrl` — the `http(s)://` URL that starts the sign-in flow. It gets `returnUrl=<encoded callback>` appended as a query parameter (joined with `&` if `authUrl` already has a `?`) — your backend must redirect the browser back to that exact URL, with an `authCode=<value>` query parameter, once sign-in completes.
+- `options` — optional. Either a plain number (treated as `timeoutMs`), or an object:
+  - `timeoutMs` — how long to wait for the callback before giving up. Default `120000` (2 minutes).
+  - `returnUrl` — override the callback URL instead of the auto-generated one. Must be `http://` on `localhost`/`127.0.0.1`/`::1`, with an explicit port. Use this only if your identity provider requires a fixed, pre-registered redirect URL — leave it unset otherwise, which lets the shell pick any free local port.
+- Returns: `Promise<string>` — the `authCode` value read off the callback request's query string. Exchange it for a real token yourself (e.g. via `shell.post` to your backend) — this call does not do the token exchange.
+
+```javascript
+const authCode = await shell.authViaBrowser(
+  "https://idp.example.com/saml/login?service=myapp",
+);
+
+const res = await shell.post(
+  "https://api.example.com/auth/exchange",
+  JSON.stringify({ authCode }),
+  { "Content-Type": "application/json" },
+);
+```
+
+With a fixed, pre-registered redirect URL and a longer timeout:
+
+```javascript
+const authCode = await shell.authViaBrowser("https://idp.example.com/saml/login", {
+  timeoutMs: 300_000,
+  returnUrl: "http://127.0.0.1:41417/callback",
+});
+```
+
+Behavior notes:
+
+- Opens the URL with the OS's default browser opener (same mechanism as `openFile`), not a Tauri window — there is no `id` to track, close, or `evalWindow` into.
+- The local callback listener accepts exactly one real request (it ignores stray/empty requests without a `error` or `authCode` param, such as browser favicon fetches) and shows the caller a static "you can close this tab" HTML page — it does not redirect anywhere.
+- If the backend redirects with `?error=...` instead of `?authCode=...`, the promise rejects with `"authentication error: <value>"`.
+- If nothing hits the callback before `timeoutMs` elapses, the promise rejects with `"authentication timed out waiting for browser callback"`.
+- `returnUrl`, when provided, is validated to be loopback-only (`localhost`/`127.0.0.1`/`::1`) with an explicit non-zero port — anything else is rejected before the browser is opened.
 
 ## `shell.dbQuery(dbName, query, params?)`
 
@@ -434,7 +486,8 @@ Common cases:
 - Invalid database name or SQL error in `dbQuery` / `dbExecute`
 - Window not available yet when calling window APIs during very early page load
 - Unknown window `id`, or `id: "main"`, passed to `closeWindow`
-- The platform opener binary is missing (e.g. `xdg-open` not installed) in `openFile`/`openFileLocation`
+- The platform opener binary is missing (e.g. `xdg-open` not installed) in `openFile`/`openFileLocation` or `authViaBrowser`
+- Invalid/non-loopback `returnUrl`, backend redirect with `?error=...`, or timeout in `authViaBrowser`
 
 ## Full example
 
@@ -477,3 +530,4 @@ Common cases:
 - `evalWindow` result values must be JSON-serializable (like `dbQuery`/`fetch` payloads) — functions, DOM nodes, etc. come back as `null`
 - `openFile`/`openFileLocation` resolve once the OS has been asked to open the item, not once it's actually open — a missing default app or file manager failure won't surface as a rejected promise
 - `openFileLocation` "selects" the file on macOS/Windows; on Linux it can only open the enclosing folder, not select the file within it
+- `authViaBrowser` runs the flow in the system browser, not a `shell`-controlled webview — there's no `evalWindow`/`getWindowBody` equivalent for it; the calling backend must redirect to the local callback with `authCode`/`error` in the query string itself

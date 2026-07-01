@@ -130,9 +130,11 @@ Available immediately on `window` before your page scripts run. Every method ret
 | `openWindow` | `(url, options?) → { id }` | Open a child webview window (e.g. an external auth flow) |
 | `closeWindow` | `(id) → void` | Close a window opened via `openWindow` |
 | `onWindowNavigated` | `((id, url) => void) → unlisten` | Subscribe to navigation events across all child windows |
+| `onWindowLoaded` | `((id, url) => void) → unlisten` | Subscribe to page-load-finished events across all child windows |
 | `onWindowClosed` | `((id) => void) → unlisten` | Subscribe to child windows closing |
 | `getWindowBody` | `(id) → string` | Get `document.body.innerText` from a child window |
 | `evalWindow` | `(id, code) → any` | Run JS in a child window (as an `async` function body) and return its result |
+| `authViaBrowser` | `(authUrl, options?) → authCode` | Run a sign-in flow in the system browser, wait for the redirect back, return the auth code |
 
 `name`/`dbName` arguments are always simple filenames — see [path rules](#path-rules-inside-the-app-filenames-not-paths) above. Window/screen methods are rarely needed — see [below](#window-and-screen--mostly-skip-these). Child-window methods are covered [below](#child-windows--openwindow--closewindow--onwindownavigated--onwindowclosed).
 
@@ -279,7 +281,7 @@ Practice:
 
 ### Child windows — `openWindow` / `closeWindow` / `onWindowNavigated` / `onWindowClosed` / `getWindowBody` / `evalWindow`
 
-The main window can't navigate away to run an external flow (there's no browser chrome, and doing so would lose your app). Use a child window for that — the canonical case is an OAuth/login flow you need to drive and observe from your JS app.
+The main window can't navigate away to run an external flow (there's no browser chrome, and doing so would lose your app). Use a child window for that — the canonical case is an OAuth/login flow you need to drive and observe from your JS app. If the identity provider refuses to run inside an embedded webview (common for SAML/SSO), use [`authViaBrowser`](#system-browser-sign-in--authviabrowser) instead, which runs the flow in the system browser.
 
 ```javascript
 const { id } = await shell.openWindow("https://accounts.example.com/oauth/authorize?...", {
@@ -314,6 +316,44 @@ const unlistenClosed = await shell.onWindowClosed((windowId) => {
   const title = await shell.evalWindow(id, "return document.title;");
   ```
 - There's no sandboxing between a child window and your main window beyond being separate native windows — don't open untrusted URLs you wouldn't want the user pointed at outside your app either. `evalWindow` runs arbitrary JS with the same lack of sandboxing, so only point it at windows you opened yourself.
+- `onWindowLoaded((id, url) => ...)` — like `onWindowNavigated`, but fires once the page has actually finished loading rather than on navigation start/redirect. Prefer this over `onWindowNavigated` when you need the DOM settled before calling `getWindowBody`/`evalWindow`.
+
+### System-browser sign-in — `authViaBrowser`
+
+Some identity providers (most SAML/SSO setups) detect and refuse to run inside an embedded webview like `openWindow`'s child window — they only work in the user's actual default browser. `authViaBrowser` covers that case: it opens the URL in the system browser, spins up a one-time local HTTP listener, and resolves once your backend redirects the browser back to it.
+
+```javascript
+// authUrl is your backend's "start sign-in" URL — it should accept a returnUrl
+// query param and redirect the browser there (with ?authCode=... or ?error=...)
+// once the identity provider flow completes.
+const authCode = await shell.authViaBrowser(
+  "https://idp.example.com/saml/login?service=myapp",
+);
+
+const res = await shell.post(
+  "https://api.example.com/auth/exchange",
+  JSON.stringify({ authCode }),
+  { "Content-Type": "application/json" },
+);
+if (res.ok) {
+  const { token } = JSON.parse(res.body);
+  // store token, e.g. via saveFile or in memory
+}
+```
+
+How it works, in order:
+
+1. The shell picks a free `127.0.0.1` port (or binds `returnUrl` if you passed one) and starts listening.
+2. It opens `authUrl` in the OS default browser, with `returnUrl=<the callback URL>` appended as a query param.
+3. Your backend runs its normal SSO flow, then 302-redirects the browser to `<returnUrl>?authCode=<value>` (or `?error=<value>` on failure).
+4. The shell's local listener catches that one request, shows a static "you can close this tab" page, and resolves the promise with `authCode` (or rejects with the `error` value).
+
+Practice:
+
+- Prefer the default auto-picked port (omit `options.returnUrl`) unless your identity provider requires a fixed, pre-registered redirect URI — only then pass a fixed `returnUrl` (e.g. `"http://127.0.0.1:41417/callback"`), and make sure that same URL is registered with the provider.
+- Set `options.timeoutMs` generously for flows that involve MFA or an approval step; the default is 2 minutes (`120000`).
+- This is a one-shot flow, not a window you control — there's no `id`, no `evalWindow`/`getWindowBody` into it, and nothing to `closeWindow`. If you need to script/observe the login page itself, use `openWindow` instead (accepting that some providers will block it).
+- The call only returns an `authCode` string; exchanging it for a session/token is your backend's job, typically via `shell.post`.
 
 ### What you get for free, unprompted
 

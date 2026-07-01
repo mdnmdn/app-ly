@@ -25,6 +25,7 @@ commands.allow = [
   "shell_close_window",
   "shell_get_window_body",
   "shell_eval_window",
+  "shell_auth_via_browser",
 ]
 
 # Reported by a child window's own script (via window.__TAURI__.core.invoke)

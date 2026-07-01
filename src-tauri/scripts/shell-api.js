@@ -55,8 +55,27 @@ window.shell = {
     window.__TAURI__.core.invoke("shell_get_window_body", { id }),
   evalWindow: (id, code) =>
     window.__TAURI__.core.invoke("shell_eval_window", { id, code }),
+  authViaBrowser: (authUrl, options) => {
+    let timeoutMs;
+    let returnUrl;
+    if (typeof options === "number") {
+      timeoutMs = options;
+    } else if (options && typeof options === "object") {
+      timeoutMs = options.timeoutMs;
+      returnUrl = options.returnUrl;
+    }
+    return window.__TAURI__.core.invoke("shell_auth_via_browser", {
+      authUrl,
+      timeoutMs,
+      returnUrl,
+    });
+  },
   onWindowNavigated: (callback) =>
     window.__TAURI__.event.listen("shell://window-navigated", (event) =>
+      callback(event.payload.id, event.payload.url),
+    ),
+  onWindowLoaded: (callback) =>
+    window.__TAURI__.event.listen("shell://window-loaded", (event) =>
       callback(event.payload.id, event.payload.url),
     ),
   onWindowClosed: (callback) =>
