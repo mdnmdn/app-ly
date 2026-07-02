@@ -31,10 +31,11 @@ jobs:
             bundles: "dmg,app"
             arch: aarch64
             target: "aarch64-apple-darwin"
-          - platform: macos-latest
-            bundles: "dmg,app"
-            arch: x64
-            target: "x86_64-apple-darwin"
+          # macOS x64 (Intel) build disabled
+          # - platform: macos-latest
+          #   bundles: "dmg,app"
+          #   arch: x64
+          #   target: "x86_64-apple-darwin"
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -46,7 +47,7 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
 
       - name: install frontend dependencies
         run: npm install
@@ -160,6 +161,12 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+        # We need a git checkout so `gh` can resolve the repository context.
+        # Without it, `gh release view` etc. fail with "failed to run git: fatal: not a git repository".
+
       - name: Download prepared release assets
         uses: actions/download-artifact@v4
         with:
@@ -173,8 +180,9 @@ jobs:
         shell: bash
         run: |
           TAG="${{ github.ref_name }}"
+          git fetch --tags --force || true
           echo "Prepared assets (these are the only ones that should end up on the final release):"
-          ls -la ./assets/
+          ls -la ./assets/ || true
 
           # Always (re)create or ensure the release exists as a DRAFT.
           # This way nothing is "published" to users while we are still uploading/cleaning.
@@ -183,46 +191,65 @@ jobs:
             --title "app-ly $TAG" \
             --draft \
             --repo ${{ github.repository }} \
+            --target ${{ github.sha }} \
             || true
 
           # If it existed as a published release already, force it back to draft for safety
           gh release edit "$TAG" --draft=true --repo ${{ github.repository }} || true
 
-          cd ./assets
+          # Ensure the release object is bound to our tag (not an "untagged-xxx" commit-only release).
+          # This fixes cases where tauri-action or gh created a release without the tag reference.
+          RELEASE_ID=$(gh release view "$TAG" --repo ${{ github.repository }} --json id --jq .id 2>/dev/null || echo "")
+          if [ -n "$RELEASE_ID" ]; then
+            gh api \
+              --method PATCH \
+              -H "Accept: application/vnd.github+json" \
+              /repos/${{ github.repository }}/releases/$RELEASE_ID \
+              -f "tag_name=$TAG" \
+              -f "target_commitish=${{ github.sha }}" \
+              || true
+          fi
+
+          ASSET_DIR="./assets"
 
           # Upload ONLY our good assets (zipped exe, dmgs, .app zips)
-          gh release upload "$TAG" * --clobber --repo ${{ github.repository }} || true
+          gh release upload "$TAG" "$ASSET_DIR"/* --clobber --repo ${{ github.repository }} || true
 
           # --- Clean up everything we don't want visible ---
           # Goal: only dmg + our intentional zips (setup zip + .app zip). No raw exe, no msi, no source tarballs.
           shopt -s nullglob
 
           # List of filenames we just uploaded / want to keep
-          keep=($(ls -1))
+          keep=($(ls -1 "$ASSET_DIR"))
 
-          # Remove raw Windows exe
-          for zip in *-setup.zip; do
-            exe="${zip%.zip}.exe"
-            echo "Removing raw exe: $exe"
-            gh release delete-asset "$TAG" "$exe" --yes --repo ${{ github.repository }} || true
+          # Remove raw Windows exe (derive name from the zip we prepared)
+          for zip in "$ASSET_DIR"/*-setup.zip; do
+            base=$(basename "$zip")
+            exe="${base%.zip}.exe"
+            echo "Removing raw exe if present: $exe"
+            gh release delete-asset "$TAG" "$exe" --yes --repo ${{ github.repository }} >/dev/null 2>&1 || true
           done
 
-          # Remove MSI
-          for msi in *.msi; do
-            echo "Removing MSI: $msi"
-            gh release delete-asset "$TAG" "$msi" --yes --repo ${{ github.repository }} || true
+          # Remove MSI (if any was prepared or previously uploaded by tauri)
+          for msi in "$ASSET_DIR"/*.msi; do
+            [ -e "$msi" ] || continue
+            base=$(basename "$msi")
+            echo "Removing MSI if present: $base"
+            gh release delete-asset "$TAG" "$base" --yes --repo ${{ github.repository }} >/dev/null 2>&1 || true
           done
 
-          # Remove tauri-generated app tarballs
-          for tar in *.app.tar.gz *.app.tar.gz.sig; do
-            echo "Removing app tarball: $tar"
-            gh release delete-asset "$TAG" "$tar" --yes --repo ${{ github.repository }} || true
+          # Remove tauri-generated app tarballs (if present in our artifacts)
+          for tar in "$ASSET_DIR"/*.app.tar.gz "$ASSET_DIR"/*.app.tar.gz.sig; do
+            [ -e "$tar" ] || continue
+            base=$(basename "$tar")
+            echo "Removing app tarball if present: $base"
+            gh release delete-asset "$TAG" "$base" --yes --repo ${{ github.repository }} >/dev/null 2>&1 || true
           done
 
           # Remove GitHub's auto "Source code (zip)" / "Source code (tar.gz)" and any other stray .zip/.tar.gz
           # We keep only the ones that match files we have in ./assets right now.
           echo "Removing any other zip/tar.gz that are not our curated assets (e.g. source code archives)..."
-          gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r asset; do
+          gh release view "$TAG" --repo ${{ github.repository }} --json assets --jq '.assets[].name' | while read -r asset; do
             [[ -z "$asset" ]] && continue
             if [[ "$asset" =~ \.(zip|tar\.gz)$ ]]; then
               is_keep=false
