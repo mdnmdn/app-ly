@@ -1,5 +1,12 @@
 name: release
 
+# IMPORTANT for "Resource not accessible by integration" errors:
+# In your repository, go to:
+#   Settings > Actions > General > Workflow permissions
+# and select "Read and write permissions".
+# The GITHUB_TOKEN needs write access to create releases and upload assets.
+# The 'permissions:' below request it, but the repo setting can override.
+
 on:
   push:
     tags:
@@ -9,15 +16,25 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  build:
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: windows-latest
-            args: "--bundles nsis"
+            bundles: "nsis"
+            arch: x64
+            target: ""
           - platform: macos-latest
-            args: "--target aarch64-apple-darwin --bundles dmg"
+            bundles: "dmg,app"
+            arch: aarch64
+            target: "aarch64-apple-darwin"
+          - platform: macos-latest
+            bundles: "dmg,app"
+            arch: x64
+            target: "x86_64-apple-darwin"
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -29,35 +46,214 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: install frontend dependencies
         run: npm install
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Compute tauri build args
+        id: tauri-args
+        shell: bash
+        run: |
+          ARGS="--bundles ${{ matrix.bundles }}"
+          if [ -n "${{ matrix.target }}" ]; then
+            ARGS="--target ${{ matrix.target }} $ARGS"
+          fi
+          echo "args=$ARGS" >> $GITHUB_OUTPUT
+          echo "tauri build args: $ARGS"
+
+      - uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "app-ly ${{ github.ref_name }}"
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
+          args: ${{ steps.tauri-args.outputs.args }}
+          uploadUpdaterJson: false
+          releaseDraft: true
+        # tauri-action may still try to create a (draft) release.
+        # We curate in publish job and only undraft at the very end on success.
+        # continue-on-error keeps our prepare steps running even if its release step has issues.
+        continue-on-error: true
 
-      - name: zip windows installer
+      # --- Compute correct bundle root (handles --target cross compiles) ---
+      - name: Compute bundle root
+        id: bundle-root
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.target }}" ]; then
+            ROOT="src-tauri/target/${{ matrix.target }}/release/bundle"
+          else
+            ROOT="src-tauri/target/release/bundle"
+          fi
+          echo "path=$ROOT" >> $GITHUB_OUTPUT
+          echo "bundle root: $ROOT"
+          ls -la "$ROOT" 2>/dev/null || echo "(dir may not exist yet for this matrix entry)"
+
+      # --- Windows: zip the exe (setup) ---
+      - name: Prepare Windows exe zip
+        id: prepare-win
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          $exe = Get-ChildItem -Path src-tauri/target/release/bundle/nsis -Filter *.exe | Select-Object -First 1
-          Compress-Archive -Path $exe.FullName -DestinationPath "$($exe.BaseName).zip"
-          echo "EXE_NAME=$($exe.Name)" >> $env:GITHUB_ENV
-          echo "ZIP_NAME=$($exe.BaseName).zip" >> $env:GITHUB_ENV
+          $root = "${{ steps.bundle-root.outputs.path }}/nsis"
+          $exe = Get-ChildItem -Path $root -Filter *.exe | Select-Object -First 1
+          if (-not $exe) { throw "No NSIS exe found in $root" }
+          $zipName = "$($exe.BaseName).zip"
+          Compress-Archive -Path $exe.FullName -DestinationPath $zipName -Force
+          echo "zip-path=$zipName" >> $env:GITHUB_OUTPUT
+          Write-Host "Prepared $zipName"
 
-      - name: swap exe asset for zip
+      - name: Upload Windows release asset
         if: matrix.platform == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-asset-windows
+          path: ${{ steps.prepare-win.outputs.zip-path }}
+          if-no-files-found: error
+
+      # --- macOS: dmg (from tauri) + zip the .app ---
+      - name: Prepare macOS dmg + app zip
+        id: prepare-mac
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE_ROOT="${{ steps.bundle-root.outputs.path }}"
+
+          # Discover the produced dmg (keeps the exact version/arch from tauri)
+          DMG=$(find "$BUNDLE_ROOT/dmg" -name "*.dmg" -type f | head -1 || true)
+          if [ -z "$DMG" ]; then
+            echo "No .dmg found under $BUNDLE_ROOT/dmg"
+            exit 1
+          fi
+          DMG_NAME=$(basename "$DMG")
+          echo "dmg-path=$DMG" >> $GITHUB_OUTPUT
+          echo "dmg-name=$DMG_NAME" >> $GITHUB_OUTPUT
+
+          # Zip the .app bundle (use ditto on macOS for correct resource fork handling)
+          APP_PATH=$(find "$BUNDLE_ROOT/macos" -name "*.app" -type d | head -1 || true)
+          if [ -n "$APP_PATH" ]; then
+            ZIP_NAME="${DMG_NAME%.dmg}.app.zip"
+            ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ZIP_NAME"
+            echo "app-zip-path=$ZIP_NAME" >> $GITHUB_OUTPUT
+            echo "Prepared $ZIP_NAME from $(basename "$APP_PATH")"
+          fi
+
+      - name: Upload macOS dmg
+        if: matrix.platform == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-asset-macos-${{ matrix.arch }}-dmg
+          path: ${{ steps.prepare-mac.outputs.dmg-path }}
+          if-no-files-found: error
+
+      - name: Upload macOS .app zip
+        if: matrix.platform == 'macos-latest' && steps.prepare-mac.outputs.app-zip-path != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-asset-macos-${{ matrix.arch }}-app
+          path: ${{ steps.prepare-mac.outputs.app-zip-path }}
+          if-no-files-found: warn
+
+  publish:
+    needs: build
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download prepared release assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-asset-*
+          path: ./assets
+          merge-multiple: true
+
+      - name: Create draft release and upload curated assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          gh release upload "${{ github.ref_name }}" "$ZIP_NAME" --clobber --repo ${{ github.repository }}
-          gh release delete-asset "${{ github.ref_name }}" "$EXE_NAME" --yes --repo ${{ github.repository }}
+          TAG="${{ github.ref_name }}"
+          echo "Prepared assets (these are the only ones that should end up on the final release):"
+          ls -la ./assets/
+
+          # Always (re)create or ensure the release exists as a DRAFT.
+          # This way nothing is "published" to users while we are still uploading/cleaning.
+          # If a previous step or matrix job failed, this job may be skipped and the release stays draft.
+          gh release create "$TAG" \
+            --title "app-ly $TAG" \
+            --draft \
+            --repo ${{ github.repository }} \
+            || true
+
+          # If it existed as a published release already, force it back to draft for safety
+          gh release edit "$TAG" --draft=true --repo ${{ github.repository }} || true
+
+          cd ./assets
+
+          # Upload ONLY our good assets (zipped exe, dmgs, .app zips)
+          gh release upload "$TAG" * --clobber --repo ${{ github.repository }} || true
+
+          # --- Clean up everything we don't want visible ---
+          # Goal: only dmg + our intentional zips (setup zip + .app zip). No raw exe, no msi, no source tarballs.
+          shopt -s nullglob
+
+          # List of filenames we just uploaded / want to keep
+          keep=($(ls -1))
+
+          # Remove raw Windows exe
+          for zip in *-setup.zip; do
+            exe="${zip%.zip}.exe"
+            echo "Removing raw exe: $exe"
+            gh release delete-asset "$TAG" "$exe" --yes --repo ${{ github.repository }} || true
+          done
+
+          # Remove MSI
+          for msi in *.msi; do
+            echo "Removing MSI: $msi"
+            gh release delete-asset "$TAG" "$msi" --yes --repo ${{ github.repository }} || true
+          done
+
+          # Remove tauri-generated app tarballs
+          for tar in *.app.tar.gz *.app.tar.gz.sig; do
+            echo "Removing app tarball: $tar"
+            gh release delete-asset "$TAG" "$tar" --yes --repo ${{ github.repository }} || true
+          done
+
+          # Remove GitHub's auto "Source code (zip)" / "Source code (tar.gz)" and any other stray .zip/.tar.gz
+          # We keep only the ones that match files we have in ./assets right now.
+          echo "Removing any other zip/tar.gz that are not our curated assets (e.g. source code archives)..."
+          gh release view "$TAG" --json assets --jq '.assets[].name' | while read -r asset; do
+            [[ -z "$asset" ]] && continue
+            if [[ "$asset" =~ \.(zip|tar\.gz)$ ]]; then
+              is_keep=false
+              for k in "${keep[@]}"; do
+                if [[ "$asset" == "$k" ]]; then is_keep=true; break; fi
+              done
+              if ! $is_keep; then
+                echo "Deleting unwanted archive from release: $asset"
+                gh release delete-asset "$TAG" "$asset" --yes --repo ${{ github.repository }} || true
+              fi
+            fi
+          done
+
+          echo "All unwanted assets removed. Release is still a draft."
+
+      - name: Publish the release (only on full success)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+
+          # Safety: do not publish a release that has no good assets
+          if [ -z "$(ls -A ./assets 2>/dev/null)" ]; then
+            echo "ERROR: No curated assets were prepared. Leaving the release as draft."
+            exit 1
+          fi
+
+          echo "All builds and asset curation succeeded."
+          echo "Publishing release $TAG (undrafting)..."
+          gh release edit "$TAG" --draft=false --repo ${{ github.repository }}
+          echo "✅ Release $TAG is now published."
+          echo "Only the desired assets (Windows exe zip + mac dmgs + .app zips) should be present."
+          echo "Source code zips have been removed."
