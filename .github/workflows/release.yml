@@ -24,7 +24,7 @@ jobs:
       matrix:
         include:
           - platform: windows-latest
-            bundles: "nsis"
+            # bundles: "nsis"   # commented out — we want the plain executable, not the NSIS installer
             arch: x64
             target: ""
           - platform: macos-latest
@@ -56,10 +56,15 @@ jobs:
         id: tauri-args
         shell: bash
         run: |
-          ARGS="--bundles ${{ matrix.bundles }}"
+          ARGS=""
+          if [ -n "${{ matrix.bundles }}" ]; then
+            ARGS="--bundles ${{ matrix.bundles }}"
+          fi
           if [ -n "${{ matrix.target }}" ]; then
             ARGS="--target ${{ matrix.target }} $ARGS"
           fi
+          # trim leading space if any
+          ARGS=$(echo "$ARGS" | xargs)
           echo "args=$ARGS" >> $GITHUB_OUTPUT
           echo "tauri build args: $ARGS"
 
@@ -81,27 +86,36 @@ jobs:
         shell: bash
         run: |
           if [ -n "${{ matrix.target }}" ]; then
-            ROOT="src-tauri/target/${{ matrix.target }}/release/bundle"
+            BUNDLE_ROOT="src-tauri/target/${{ matrix.target }}/release/bundle"
+            BIN_ROOT="src-tauri/target/${{ matrix.target }}/release"
           else
-            ROOT="src-tauri/target/release/bundle"
+            BUNDLE_ROOT="src-tauri/target/release/bundle"
+            BIN_ROOT="src-tauri/target/release"
           fi
-          echo "path=$ROOT" >> $GITHUB_OUTPUT
-          echo "bundle root: $ROOT"
-          ls -la "$ROOT" 2>/dev/null || echo "(dir may not exist yet for this matrix entry)"
+          echo "path=$BUNDLE_ROOT" >> $GITHUB_OUTPUT
+          echo "bundle-path=$BUNDLE_ROOT" >> $GITHUB_OUTPUT
+          echo "bin-path=$BIN_ROOT" >> $GITHUB_OUTPUT
+          echo "bundle root: $BUNDLE_ROOT"
+          echo "bin root: $BIN_ROOT"
+          ls -la "$BUNDLE_ROOT" 2>/dev/null || echo "(bundle dir may not exist)"
+          ls -la "$BIN_ROOT"/*.exe 2>/dev/null | head -3 || echo "(no exe yet or not windows)"
 
-      # --- Windows: zip the exe (setup) ---
+      # --- Windows: zip the plain executable (no installer) ---
       - name: Prepare Windows exe zip
         id: prepare-win
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          $root = "${{ steps.bundle-root.outputs.path }}/nsis"
-          $exe = Get-ChildItem -Path $root -Filter *.exe | Select-Object -First 1
-          if (-not $exe) { throw "No NSIS exe found in $root" }
+          $binRoot = "${{ steps.bundle-root.outputs.bin-path }}"
+          # Get the main executable (not any setup or helper exes)
+          $exe = Get-ChildItem -Path $binRoot -Filter *.exe | 
+                 Where-Object { $_.Name -notlike '*setup*' -and $_.Name -notlike '*uninst*' } |
+                 Select-Object -First 1
+          if (-not $exe) { throw "No executable found in $binRoot" }
           $zipName = "$($exe.BaseName).zip"
           Compress-Archive -Path $exe.FullName -DestinationPath $zipName -Force
           echo "zip-path=$zipName" >> $env:GITHUB_OUTPUT
-          Write-Host "Prepared $zipName"
+          Write-Host "Prepared $zipName (plain exe, no installer)"
 
       - name: Upload Windows release asset
         if: matrix.platform == 'windows-latest'
@@ -118,7 +132,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          BUNDLE_ROOT="${{ steps.bundle-root.outputs.path }}"
+          BUNDLE_ROOT="${{ steps.bundle-root.outputs.bundle-path }}"
 
           # Discover the produced dmg (keeps the exact version/arch from tauri)
           DMG=$(find "$BUNDLE_ROOT/dmg" -name "*.dmg" -type f | head -1 || true)
@@ -222,11 +236,11 @@ jobs:
           # List of filenames we just uploaded / want to keep
           keep=($(ls -1 "$ASSET_DIR"))
 
-          # Remove raw Windows exe (derive name from the zip we prepared)
+          # Remove any raw Windows installer exe that might have been generated (we ship the plain exe instead)
           for zip in "$ASSET_DIR"/*-setup.zip; do
             base=$(basename "$zip")
             exe="${base%.zip}.exe"
-            echo "Removing raw exe if present: $exe"
+            echo "Removing raw installer exe if present: $exe"
             gh release delete-asset "$TAG" "$exe" --yes --repo ${{ github.repository }} >/dev/null 2>&1 || true
           done
 
