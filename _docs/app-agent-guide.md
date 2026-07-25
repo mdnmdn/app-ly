@@ -67,6 +67,7 @@ name = "My App"               # window title
 contents = "contents/index.html"  # entry HTML, relative to this app.toml's directory
 dataPath = "data"             # writable data dir, relative to this app.toml's directory
 showDevMenu = true            # optional. default: true in dev, false in release
+keychainPrefix = "my-app"     # optional. prefix for OS keychain keys, default "app-ly"
 
 [settings]                    # optional. string-only key/value map, exposed as shell.settings
 apiBaseUrl = "https://api.example.com"
@@ -76,10 +77,7 @@ Rules and gotchas:
 
 - **All paths in `app.toml` are relative to the directory containing that `app.toml`** — not the project root, not cwd. Keep `icon`, `contents`, and `dataPath` inside (or under) the same folder as the `app.toml` that references them. Don't use absolute paths or `..` to reach outside your app folder.
 - `contents` must point at a single HTML **file**. Everything else referenced from that HTML (JS, CSS, images) is resolved relative to that file's directory by the browser as normal — put your whole frontend under one `contents/` folder so it travels as a unit.
-- `dataPath` behaves differently in dev vs release — don't hardcode logic that assumes one or the other:
-  - **Dev** (`tauri dev`): `<app.toml dir>/<dataPath>` — lands inside your project folder, easy to inspect.
-  - **Release** (`tauri build` bundle): `<OS app-data-dir>/<dataPath>` — a writable, sandboxed location outside the read-only app bundle. Never assume `dataPath` is next to your HTML in release.
-  - The directory (and a `logs/` subdirectory inside it) is created automatically at startup. Don't try to create it yourself.
+- `dataPath` is always relative to the directory containing `app.toml` — both in dev and release. The directory (and a `logs/` subdirectory inside it) is created automatically at startup. Don't try to create it yourself.
 - `showDevMenu`: leave it `true` while building; an app you intend to ship without DevTools exposed should set it `false` (or omit it, since release already defaults to `false`).
 - `[settings]` values must be TOML strings (`key = "value"`) — this is an env-var-shaped map, not a general config tree. Quote numbers/booleans too if you put them here; your JS gets them back as strings either way.
 - A `.env` file (plain `KEY=VALUE` lines, `#` comments, optional quotes) placed next to `app.toml` is merged on top of `[settings]` and **wins on key collisions**. Use `[settings]` for checked-in defaults, `.env` for local overrides and secrets you don't want in version control — and make sure `.env` is in `.gitignore`.
@@ -135,6 +133,20 @@ Available immediately on `window` before your page scripts run. Every method ret
 | `getWindowBody` | `(id) → string` | Get `document.body.innerText` from a child window |
 | `evalWindow` | `(id, code) → any` | Run JS in a child window (as an `async` function body) and return its result |
 | `authViaBrowser` | `(authUrl, options?) → authCode` | Run a sign-in flow in the system browser, wait for the redirect back, return the auth code |
+| `secretSet` | `(service, account, password) → void` | Store a secret in the OS keychain (macOS Keychain, Linux Secret Service, Windows Credential Manager) |
+| `secretGet` | `(service, account) → string` | Retrieve a secret from the OS keychain |
+| `secretDelete` | `(service, account) → void` | Delete a secret from the OS keychain |
+| `httpStart` | `(options?) → { port }` | Start a local HTTP server on `127.0.0.1` |
+| `httpRespond` | `(id, status, headers?, body?) → void` | Send an HTTP response for a received request |
+| `httpStop` | `() → void` | Stop the HTTP server |
+| `onHttpRequest` | `(callback) → unlisten` | Subscribe to incoming HTTP request events |
+| `wsStart` | `(options?) → { port }` | Start a local WebSocket server on `127.0.0.1` |
+| `wsSend` | `(id, data) → void` | Send a text message to a WebSocket client |
+| `wsClose` | `(id) → void` | Close a WebSocket connection |
+| `wsStop` | `() → void` | Stop the WebSocket server |
+| `onWsConnection` | `(callback) → unlisten` | Subscribe to new WebSocket client connections |
+| `onWsMessage` | `(callback) → unlisten` | Subscribe to WebSocket text messages |
+| `onWsClose` | `(callback) → unlisten` | Subscribe to WebSocket client disconnections |
 
 `name`/`dbName` arguments are always simple filenames — see [path rules](#path-rules-inside-the-app-filenames-not-paths) above. Window/screen methods are rarely needed — see [below](#window-and-screen--mostly-skip-these). Child-window methods are covered [below](#child-windows--openwindow--closewindow--onwindownavigated--onwindowclosed).
 
@@ -343,7 +355,7 @@ if (res.ok) {
 
 How it works, in order:
 
-1. The shell picks a free `127.0.0.1` port (or binds `returnUrl` if you passed one) and starts listening.
+1. A single shared background listener on `127.0.0.1` handles all callbacks (started lazily on first use). Each flow embeds a unique `sid` in its return URL so concurrent auth requests are safely disambiguated.
 2. It opens `authUrl` in the OS default browser, with `returnUrl=<the callback URL>` appended as a query param.
 3. Your backend runs its normal SSO flow, then 302-redirects the browser to `<returnUrl>?authCode=<value>` (or `?error=<value>` on failure).
 4. The shell's local listener catches that one request, shows a static "you can close this tab" page, and resolves the promise with `authCode` (or rejects with the `error` value).
@@ -354,6 +366,75 @@ Practice:
 - Set `options.timeoutMs` generously for flows that involve MFA or an approval step; the default is 2 minutes (`120000`).
 - This is a one-shot flow, not a window you control — there's no `id`, no `evalWindow`/`getWindowBody` into it, and nothing to `closeWindow`. If you need to script/observe the login page itself, use `openWindow` instead (accepting that some providers will block it).
 - The call only returns an `authCode` string; exchanging it for a session/token is your backend's job, typically via `shell.post`.
+
+### Secure store — `secretSet` / `secretGet` / `secretDelete`
+
+Stores secrets in the OS system keychain using keyring-rs. The keychain is the right place for API tokens, credentials, encryption keys — anything you'd store in `/etc/` or a `.env` file but want properly encrypted at rest by the OS.
+
+```javascript
+await shell.secretSet("myapp", "api-key", "sk-abc123...");
+const key = await shell.secretGet("myapp", "api-key");
+await shell.secretDelete("myapp", "api-key");
+```
+
+- `service` is a logical grouping name (e.g. your app name). `account` is the specific identifier for this secret (e.g. `"api-key"` or `"user@example.com"`). Both are strings.
+- `secretGet` rejects if the entry doesn't exist — there's no `secretExists` helper; catch the error.
+- Uses the native keychain: **macOS** Keychain, **Linux** Secret Service (libsecret/gnome-keyring), **Windows** Credential Manager. No file paths, no config.
+
+### HTTP Server — `httpStart` / `httpRespond` / `httpStop` / `onHttpRequest`
+
+Runs a local HTTP server inside your app. Useful for receiving webhooks, exposing a local API to other processes on the machine, or embedding a control UI.
+
+```javascript
+const { port } = await shell.httpStart({ port: 0 });
+console.log("HTTP server on port", port);
+
+await shell.onHttpRequest(async (req) => {
+  console.log(req.method, req.url, req.headers, req.body);
+  await shell.httpRespond(req.id, 200, { "Content-Type": "text/plain" }, "Hello");
+});
+
+// later
+await shell.httpStop();
+```
+
+- `httpStart({ port })` — binds to `127.0.0.1`. Default port `0` picks any free port. Returns `{ port }` with the actual bound port. Rejects if a server is already running.
+- `onHttpRequest(callback)` — fires `{ id, method, url, headers, body }` for each incoming request. The server thread blocks until you call `httpRespond`. Return an `UnlistenFn` to stop listening.
+- `httpRespond(id, status, headers?, body?)` — sends the response. `id` must match a pending request. Rejects if the id is unknown or already responded.
+- `httpStop()` — stops the server. Pending unanswered requests will error.
+- One server at a time. Only text bodies are supported (no streaming).
+
+### WebSocket Server — `wsStart` / `wsSend` / `wsClose` / `wsStop` / `onWsConnection` / `onWsMessage` / `onWsClose`
+
+Runs a local WebSocket server for real-time bidirectional communication with other processes on the machine.
+
+```javascript
+const { port } = await shell.wsStart({ port: 0 });
+console.log("WS server on port", port);
+
+await shell.onWsConnection(({ id }) => {
+  console.log("client connected:", id);
+  shell.wsSend(id, "Welcome!");
+});
+
+await shell.onWsMessage(({ id, data }) => {
+  console.log("received from", id, data);
+});
+
+await shell.onWsClose(({ id }) => {
+  console.log("client disconnected:", id);
+});
+
+// later
+await shell.wsStop();
+```
+
+- `wsStart({ port })` — binds to `127.0.0.1`. Default port `0` picks any free port. Returns `{ port }`. One server at a time.
+- `wsSend(id, data)` — sends a text message to a connected client by id.
+- `wsClose(id)` — gracefully closes a connection.
+- `wsStop()` — stops the server, closing all active connections.
+- Events: `onWsConnection({ id })`, `onWsMessage({ id, data })`, `onWsClose({ id })`. Each returns an `UnlistenFn`.
+- Only text messages are supported (binary frames are silently ignored).
 
 ### What you get for free, unprompted
 
@@ -372,23 +453,128 @@ Practice:
 ```html
 <!doctype html>
 <html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shell Example</title>
+  </head>
   <body>
-    <button id="save">Save</button>
-    <button id="fetch">Fetch</button>
+    <h1>app-ly Shell Demo</h1>
+
+    <section>
+      <h2>Files</h2>
+      <button id="save">Save note</button>
+      <button id="load">Load note</button>
+    </section>
+
+    <section>
+      <h2>Network</h2>
+      <button id="fetch">Fetch JSON</button>
+    </section>
+
+    <section>
+      <h2>Secure Store</h2>
+      <button id="secret-set">Store secret</button>
+      <button id="secret-get">Get secret</button>
+      <button id="secret-delete">Delete secret</button>
+    </section>
+
+    <section>
+      <h2>HTTP Server</h2>
+      <button id="http-start">Start HTTP server</button>
+      <button id="http-stop">Stop HTTP server</button>
+    </section>
+
+    <section>
+      <h2>WebSocket Server</h2>
+      <button id="ws-start">Start WS server</button>
+      <button id="ws-stop">Stop WS server</button>
+    </section>
+
     <pre id="out"></pre>
+
     <script>
       const out = document.getElementById("out");
 
+      function show(value) {
+        out.textContent = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+      }
+
       document.getElementById("save").onclick = async () => {
-        await shell.saveFile("note.txt", "hello");
+        await shell.saveFile("note.txt", "hello " + new Date().toISOString());
         await shell.log("saved note");
-        await shell.notify("Saved", "note.txt updated");
-        out.textContent = "saved";
+        show("Saved.");
+      };
+
+      document.getElementById("load").onclick = async () => {
+        try {
+          const text = await shell.readFile("note.txt");
+          show(text);
+        } catch (e) {
+          show(String(e));
+        }
       };
 
       document.getElementById("fetch").onclick = async () => {
         const res = await shell.get("https://jsonplaceholder.typicode.com/todos/1");
-        out.textContent = JSON.stringify(res, null, 2);
+        show(res);
+      };
+
+      document.getElementById("secret-set").onclick = async () => {
+        await shell.secretSet("demo", "test-key", "my-secret-value");
+        show("Secret stored.");
+      };
+
+      document.getElementById("secret-get").onclick = async () => {
+        try {
+          const value = await shell.secretGet("demo", "test-key");
+          show(value);
+        } catch (e) {
+          show(String(e));
+        }
+      };
+
+      document.getElementById("secret-delete").onclick = async () => {
+        await shell.secretDelete("demo", "test-key");
+        show("Secret deleted.");
+      };
+
+      let httpRunning = false;
+      document.getElementById("http-start").onclick = async () => {
+        if (httpRunning) return show("Already running");
+        const { port } = await shell.httpStart({ port: 0 });
+        httpRunning = true;
+        show(`HTTP server on port ${port}`);
+        await shell.onHttpRequest(async (req) => {
+          await shell.httpRespond(req.id, 200, { "Content-Type": "application/json" }, JSON.stringify({ ok: true, url: req.url }));
+        });
+      };
+
+      document.getElementById("http-stop").onclick = async () => {
+        await shell.httpStop();
+        httpRunning = false;
+        show("HTTP server stopped.");
+      };
+
+      let wsRunning = false;
+      document.getElementById("ws-start").onclick = async () => {
+        if (wsRunning) return show("Already running");
+        const { port } = await shell.wsStart({ port: 0 });
+        wsRunning = true;
+        show(`WS server on port ${port}`);
+        await shell.onWsConnection(({ id }) => {
+          show(`Client connected: ${id}`);
+          shell.wsSend(id, "Welcome!");
+        });
+        await shell.onWsMessage(({ id, data }) => {
+          show(`Message from ${id}: ${data}`);
+        });
+      };
+
+      document.getElementById("ws-stop").onclick = async () => {
+        await shell.wsStop();
+        wsRunning = false;
+        show("WS server stopped.");
       };
     </script>
   </body>
@@ -404,3 +590,5 @@ Practice:
 5. `fetch`/`get`/`post` responses are JSON-parsed only if you know the API returns JSON — `res.body` is always a raw string.
 6. Secrets/local overrides live in `.env` next to `app.toml` (gitignored), not in `[settings]` if `app.toml` is committed.
 7. Tested by launching the `app-ly` binary from your app's folder (or `npm run tauri dev -- --config ./yourapp/app.toml` if working from a shell checkout), including the cold-start case (no existing `dataPath` files).
+8. Sensitive credentials use `secretSet`/`secretGet` (OS keychain) instead of `saveFile` for anything you'd call a secret.
+9. If using the HTTP or WebSocket server, handle the "already running" error gracefully in your UI.

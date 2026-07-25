@@ -112,7 +112,13 @@ jobs:
                  Where-Object { $_.Name -notlike '*setup*' -and $_.Name -notlike '*uninst*' } |
                  Select-Object -First 1
           if (-not $exe) { throw "No executable found in $binRoot" }
-          $zipName = "$($exe.BaseName).zip"
+
+          # Construct name similar to macOS artifacts: app-ly_{version}_win_x64.zip
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          $platform = "win"
+          $arch = "${{ matrix.arch }}"
+          $zipName = "app-ly_${version}_${platform}_${arch}.zip"
+
           Compress-Archive -Path $exe.FullName -DestinationPath $zipName -Force
           echo "zip-path=$zipName" >> $env:GITHUB_OUTPUT
           Write-Host "Prepared $zipName (plain exe, no installer)"

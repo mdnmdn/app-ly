@@ -415,10 +415,191 @@ const authCode = await shell.authViaBrowser("https://idp.example.com/saml/login"
 Behavior notes:
 
 - Opens the URL with the OS's default browser opener (same mechanism as `openFile`), not a Tauri window — there is no `id` to track, close, or `evalWindow` into.
-- The local callback listener accepts exactly one real request (it ignores stray/empty requests without a `error` or `authCode` param, such as browser favicon fetches) and shows the caller a static "you can close this tab" HTML page — it does not redirect anywhere.
+- A single shared background TCP listener handles all auth callbacks, so multiple `authViaBrowser` calls can run concurrently without port conflicts. Each flow is identified by a unique `sid` embedded in the return URL.
+- The callback listener accepts exactly one real request per flow (it ignores stray/empty requests without an `error` or `authCode` param, such as browser favicon fetches) and shows the caller a static "you can close this tab" HTML page — it does not redirect anywhere.
 - If the backend redirects with `?error=...` instead of `?authCode=...`, the promise rejects with `"authentication error: <value>"`.
 - If nothing hits the callback before `timeoutMs` elapses, the promise rejects with `"authentication timed out waiting for browser callback"`.
-- `returnUrl`, when provided, is validated to be loopback-only (`localhost`/`127.0.0.1`/`::1`) with an explicit non-zero port — anything else is rejected before the browser is opened.
+- `returnUrl`, when provided, should be loopback-only (`localhost`/`127.0.0.1`/`::1`). A unique `sid` is automatically appended so multiple concurrent flows with the same `returnUrl` are safely disambiguated.
+
+## `shell.secretSet(service, account, password)`
+
+Stores a secret in the OS system keychain (macOS Keychain, Linux Secret Service, Windows Credential Manager) via keyring-rs.
+
+- `service` — logical service name, e.g. `"myapp"`
+- `account` — account/user identifier, e.g. `"api-key"` or `"user@example.com"`
+- `password` — the secret value to store
+- Returns: `Promise<void>`
+
+```javascript
+await shell.secretSet("myapp", "api-key", "sk-abc123...");
+```
+
+## `shell.secretGet(service, account)`
+
+Retrieves a secret from the OS system keychain.
+
+- `service` — logical service name
+- `account` — account/user identifier
+- Returns: `Promise<string>` — the stored password; rejects if the entry does not exist
+
+```javascript
+const key = await shell.secretGet("myapp", "api-key");
+```
+
+## `shell.secretDelete(service, account)`
+
+Deletes a secret from the OS system keychain.
+
+- `service` — logical service name
+- `account` — account/user identifier
+- Returns: `Promise<void>` — rejects if the entry does not exist
+
+```javascript
+await shell.secretDelete("myapp", "api-key");
+```
+
+## `shell.httpStart(options?)`
+
+Starts a local HTTP server on `127.0.0.1`. Incoming requests are forwarded to your JS code via the `shell://http-request` event.
+
+- `options` — optional object:
+  - `port` — port to bind (default `0` = any available port)
+- Returns: `Promise<{ port: number }>` — the actual bound port
+
+You must listen for `shell://http-request` events before or shortly after starting the server, and respond via `shell.httpRespond()` for each request. The server thread blocks until a response is received.
+
+```javascript
+const { port } = await shell.httpStart({ port: 0 });
+console.log("HTTP server on port", port);
+
+await shell.onHttpRequest(async (req) => {
+  console.log(req.method, req.url, req.headers);
+  await shell.httpRespond(req.id, 200, { "Content-Type": "text/plain" }, "Hello");
+});
+```
+
+## `shell.httpRespond(id, status, headers?, body?)`
+
+Sends an HTTP response for a previously received request.
+
+- `id` — the request id from the `shell://http-request` event payload
+- `status` — HTTP status code (e.g. `200`, `404`)
+- `headers` — optional object of response header names to values
+- `body` — optional response body string
+- Returns: `Promise<void>` — rejects if the request id is unknown or already responded
+
+```javascript
+await shell.httpRespond(req.id, 200, { "Content-Type": "application/json" }, JSON.stringify({ ok: true }));
+```
+
+## `shell.httpStop()`
+
+Stops the HTTP server. Pending requests will error on respond.
+
+- Returns: `Promise<void>`
+
+```javascript
+await shell.httpStop();
+```
+
+## `shell.onHttpRequest(callback)`
+
+Subscribes to incoming HTTP requests.
+
+- `callback` — function receiving `{ id, method, url, headers, body }`
+- Returns: `Promise<UnlistenFn>` — call the resolved function to stop listening
+
+```javascript
+const unlisten = await shell.onHttpRequest((req) => {
+  shell.httpRespond(req.id, 200, {}, "OK");
+  unlisten(); // handle only one request
+});
+```
+
+## `shell.wsStart(options?)`
+
+Starts a local WebSocket server on `127.0.0.1`. New connections, incoming messages, and disconnections are forwarded to your JS code via events.
+
+- `options` — optional object:
+  - `port` — port to bind (default `0` = any available port)
+- Returns: `Promise<{ port: number }>` — the actual bound port
+
+```javascript
+const { port } = await shell.wsStart({ port: 0 });
+console.log("WS server on port", port);
+```
+
+## `shell.wsSend(id, data)`
+
+Sends a text message to a connected WebSocket client.
+
+- `id` — the connection id from the `shell://ws-connection` event
+- `data` — text string to send
+- Returns: `Promise<void>` — rejects if the connection is not found or closed
+
+```javascript
+await shell.wsSend(connId, "Reply");
+```
+
+## `shell.wsClose(id)`
+
+Closes a WebSocket connection gracefully.
+
+- `id` — the connection id from the `shell://ws-connection` event
+- Returns: `Promise<void>`
+
+```javascript
+await shell.wsClose(connId);
+```
+
+## `shell.wsStop()`
+
+Stops the WebSocket server. All active connections are closed.
+
+- Returns: `Promise<void>`
+
+```javascript
+await shell.wsStop();
+```
+
+## `shell.onWsConnection(callback)`
+
+Subscribes to new WebSocket client connections.
+
+- `callback` — function receiving `{ id }` each time a client connects
+- Returns: `Promise<UnlistenFn>`
+
+```javascript
+const unlisten = await shell.onWsConnection(({ id }) => {
+  console.log("client connected:", id);
+});
+```
+
+## `shell.onWsMessage(callback)`
+
+Subscribes to WebSocket text messages from any connected client.
+
+- `callback` — function receiving `{ id, data }` where `id` is the connection id and `data` is the text payload
+- Returns: `Promise<UnlistenFn>`
+
+```javascript
+await shell.onWsMessage(({ id, data }) => {
+  console.log(`message from ${id}:`, data);
+});
+```
+
+## `shell.onWsClose(callback)`
+
+Subscribes to WebSocket client disconnections.
+
+- `callback` — function receiving `{ id }`
+- Returns: `Promise<UnlistenFn>`
+
+```javascript
+await shell.onWsClose(({ id }) => {
+  console.log("client disconnected:", id);
+});
+```
 
 ## `shell.dbQuery(dbName, query, params?)`
 
@@ -523,7 +704,6 @@ Common cases:
 - `fetch` returns text bodies only (no streaming or binary)
 - SQLite parameter values support `null`, boolean, number, and string only
 - SQLite blob columns are returned as `null` in `dbQuery`
-- No WebSocket or multipart helpers
 - `shell.settings` values are strings only; no nested objects, numbers, or booleans
 - `.env` parsing has no multi-line values, `\n` escapes, or variable interpolation
 - Child windows (`openWindow`) are plain webviews with no `window.shell` injected into them — they're for external content only, not a place to run more of your app's JS. Use `getWindowBody`/`evalWindow` from the main window to read or drive them instead
@@ -531,3 +711,7 @@ Common cases:
 - `openFile`/`openFileLocation` resolve once the OS has been asked to open the item, not once it's actually open — a missing default app or file manager failure won't surface as a rejected promise
 - `openFileLocation` "selects" the file on macOS/Windows; on Linux it can only open the enclosing folder, not select the file within it
 - `authViaBrowser` runs the flow in the system browser, not a `shell`-controlled webview — there's no `evalWindow`/`getWindowBody` equivalent for it; the calling backend must redirect to the local callback with `authCode`/`error` in the query string itself
+- `secretGet` rejects if the keyring entry doesn't exist — there's no `secretExists` helper; catch the error or try `secretGet` directly
+- The HTTP server reads the full request body into a string before emitting the event (no streaming support)
+- The WebSocket server only supports text messages — binary frames are silently ignored
+- Only one HTTP server and one WebSocket server can run at a time; calling `httpStart`/`wsStart` while one is already running returns an error

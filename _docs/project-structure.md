@@ -33,15 +33,18 @@ app-ly/
 │   │   └── shell-shortcuts.js # devtools/reload keyboard shortcuts; injected alongside it
 │   ├── src/
 │   │   ├── main.rs            # binary entrypoint, calls lib::run()
-│   │   ├── lib.rs              # app setup: discovers app.toml, builds the main window,
+│   │   ├── lib.rs             # app setup: discovers app.toml, builds the main window,
 │   │   │                        # registers the `shell://` protocol, assembles the init script,
-│   │   │                        # registers the tauri invoke_handler
-│   │   ├── config.rs            # app.toml + .env parsing/merging
-│   │   ├── paths.rs              # resolves icon/contents/dataPath relative to config dir
-│   │   ├── commands.rs            # #[tauri::command] handlers backing window.shell (files,
-│   │   │                          # notifications, fetch, window/screen control, child windows)
-│   │   ├── db.rs                  # SQLite dbQuery/dbExecute handlers
-│   │   └── menu.rs                # native app menu (Reload, Open DevTools)
+│   │   │                        # registers the tauri invoke_handler and state managers
+│   │   ├── config.rs          # app.toml + .env parsing/merging
+│   │   ├── paths.rs           # Resolve icon, contents, data paths relative to config directory
+│   │   ├── commands.rs        # #[tauri::command] handlers backing window.shell (files,
+│   │   │                        # notifications, fetch, window/screen control, child windows)
+│   │   ├── db.rs              # SQLite dbQuery/dbExecute handlers
+│   │   ├── auth.rs            # Shared-listener authViaBrowser with concurrent flow support
+│   │   ├── keyring.rs         # OS keychain secure store (secretSet/Get/Delete)
+│   │   ├── server.rs          # Embedded HTTP server + WebSocket server
+│   │   └── menu.rs            # Native app menu (Reload, Open DevTools)
 │   └── gen/schemas/               # Tauri-generated ACL schemas, not hand-edited
 ├── _docs/                    # this documentation set
 ├── justfile                  # dev/build/check/fmt/clean task shortcuts
@@ -71,7 +74,7 @@ untracked.
 Touch all four of these, in order, or the method will compile but silently fail (or not appear)
 at runtime:
 
-1. `src-tauri/src/commands.rs` (or `db.rs`) — add the `#[tauri::command]` handler.
+1. `src-tauri/src/commands.rs` (or `db.rs`, `auth.rs`, `keyring.rs`, `server.rs`) — add the `#[tauri::command]` handler.
 2. `src-tauri/src/lib.rs` — import it and add it to the `tauri::generate_handler![...]` list.
 3. `src-tauri/permissions/shell.toml` — add the command name to `commands.allow`.
 4. `src-tauri/scripts/shell-api.js` — expose it on `window.shell`.

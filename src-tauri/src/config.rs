@@ -14,6 +14,8 @@ pub struct ShellConfig {
     pub data_path: String,
     #[serde(rename = "showDevMenu", default)]
     pub show_dev_menu: Option<bool>,
+    #[serde(rename = "keychainPrefix", default)]
+    pub keychain_prefix: Option<String>,
     #[serde(default)]
     pub settings: Option<HashMap<String, String>>,
 }

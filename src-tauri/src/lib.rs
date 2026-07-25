@@ -1,11 +1,15 @@
+mod auth;
 mod commands;
 mod config;
 mod db;
+mod keyring;
 mod menu;
 mod paths;
+mod server;
 
+use auth::shell_auth_via_browser;
 use commands::{
-    shell_auth_via_browser, shell_close_window, shell_delete_file, shell_eval_result, shell_eval_window, shell_fetch,
+    shell_close_window, shell_delete_file, shell_eval_result, shell_eval_window, shell_fetch,
     shell_get_screen_at, shell_get_screens, shell_get_window_body, shell_get_window_position,
     shell_get_window_size, shell_log, shell_minimize_window, shell_notify, shell_open_file,
     shell_open_file_location, shell_open_window, shell_read_file, shell_rename_file,
@@ -18,7 +22,12 @@ use config::{
 };
 use db::{shell_db_execute, shell_db_query};
 use http::{header::CONTENT_TYPE, Response, StatusCode};
+use keyring::{shell_secret_delete, shell_secret_get, shell_secret_set, KeychainState};
 use paths::resolve_paths;
+use server::{
+    shell_http_respond, shell_http_start, shell_http_stop, shell_ws_close, shell_ws_send,
+    shell_ws_start, shell_ws_stop, HttpServerState, WsServerState,
+};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
@@ -134,6 +143,7 @@ struct StartupPlan {
     contents_dir: PathBuf,
     fallback_html: Option<String>,
     show_dev_menu: bool,
+    keychain_prefix: String,
     settings: HashMap<String, String>,
 }
 
@@ -161,6 +171,7 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
                 contents_dir: PathBuf::from("."),
                 fallback_html: Some(config_fallback_html("Missing app.toml", &message)),
                 show_dev_menu: default_show_dev_menu(),
+                keychain_prefix: "app-ly".into(),
                 settings: HashMap::new(),
             });
         }
@@ -174,6 +185,7 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
                 contents_dir: PathBuf::from("."),
                 fallback_html: Some(config_fallback_html("Config error", &message)),
                 show_dev_menu: default_show_dev_menu(),
+                keychain_prefix: "app-ly".into(),
                 settings: HashMap::new(),
             });
         }
@@ -181,7 +193,7 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
 
     let show_dev_menu = effective_show_dev_menu(&discovery.config);
 
-    let resolved = match resolve_paths(app, &discovery.config, &discovery.config_dir) {
+    let resolved = match resolve_paths(&discovery.config, &discovery.config_dir) {
         Ok(resolved) => resolved,
         Err(message) => {
             eprintln!("{message}");
@@ -193,12 +205,19 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
                 contents_dir: PathBuf::from("."),
                 fallback_html: Some(config_fallback_html("Config error", &message)),
                 show_dev_menu,
+                keychain_prefix: "app-ly".into(),
                 settings: HashMap::new(),
             });
         }
     };
 
     let settings = load_settings(&discovery.config, &discovery.config_dir);
+
+    let keychain_prefix = discovery
+        .config
+        .keychain_prefix
+        .clone()
+        .unwrap_or_else(|| "app-ly".into());
 
     Ok(StartupPlan {
         window_title: discovery.config.name,
@@ -212,6 +231,7 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
         contents_dir: resolved.contents_dir,
         fallback_html: None,
         show_dev_menu,
+        keychain_prefix,
         settings,
     })
 }
@@ -248,6 +268,12 @@ pub fn run() {
                 data_root: plan.data_root.clone(),
             });
             app.manage(EvalState::default());
+            app.manage(KeychainState {
+                prefix: plan.keychain_prefix.clone(),
+            });
+            app.manage(auth::AuthState::new());
+            app.manage(HttpServerState::default());
+            app.manage(WsServerState::default());
             app.manage(ProtocolState {
                 contents_dir: plan.contents_dir.clone(),
                 fallback_html: plan.fallback_html.clone(),
@@ -302,7 +328,17 @@ pub fn run() {
             shell_get_window_body,
             shell_eval_window,
             shell_eval_result,
-            shell_auth_via_browser
+            shell_auth_via_browser,
+            shell_secret_set,
+            shell_secret_get,
+            shell_secret_delete,
+            shell_http_start,
+            shell_http_respond,
+            shell_http_stop,
+            shell_ws_start,
+            shell_ws_send,
+            shell_ws_close,
+            shell_ws_stop,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

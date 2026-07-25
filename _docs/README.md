@@ -34,7 +34,7 @@ All paths are relative to the directory containing `app.toml`.
 |---------|-------------------|-------------------------|
 | Config source | `./app.toml` or `--config` | Bundled `$RESOURCE/app.toml` |
 | Contents/icon | Resolved from config dir | Resolved from bundled resources |
-| Data writes | `<config-dir>/<dataPath>` | `<app-data-dir>/<dataPath>` |
+| Data writes | `<config-dir>/<dataPath>` | `<config-dir>/<dataPath>` |
 
 ## Creating a new app identity
 

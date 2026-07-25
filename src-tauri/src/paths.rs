@@ -1,6 +1,6 @@
 use crate::config::ShellConfig;
 use std::path::{Path, PathBuf};
-use tauri::{App, Manager};
+
 
 /// Folder where a deployed `app.toml` lives: next to the `.app` on macOS,
 /// or the directory containing the executable elsewhere.
@@ -47,7 +47,6 @@ pub struct ResolvedPaths {
 }
 
 pub fn resolve_paths(
-    app: &App,
     config: &ShellConfig,
     config_dir: &Path,
 ) -> Result<ResolvedPaths, String> {
@@ -63,15 +62,7 @@ pub fn resolve_paths(
         .to_string_lossy()
         .to_string();
 
-    let data_root = if cfg!(debug_assertions) {
-        config_dir.join(&config.data_path)
-    } else {
-        let app_data = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("resolve app data dir: {e}"))?;
-        app_data.join(&config.data_path)
-    };
+    let data_root = config_dir.join(&config.data_path);
 
     std::fs::create_dir_all(&data_root).map_err(|e| format!("create data dir: {e}"))?;
     std::fs::create_dir_all(data_root.join("logs")).map_err(|e| format!("create logs dir: {e}"))?;

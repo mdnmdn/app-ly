@@ -16,6 +16,20 @@
         line-height: 1.5;
       }
 
+      section {
+        margin-bottom: 1.5rem;
+      }
+
+      section h2 {
+        font-size: 1rem;
+        margin: 0 0 0.5rem;
+        color: #555;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        section h2 { color: #aaa; }
+      }
+
       button {
         margin-right: 0.5rem;
         margin-bottom: 0.5rem;
@@ -33,16 +47,44 @@
     <h1>app-ly shell</h1>
     <p>This page is loaded from the configured <code>contents</code> path.</p>
 
-    <div>
+    <section>
+      <h2>Files</h2>
       <button id="save">Save note</button>
       <button id="load">Load note</button>
       <button id="notify">Notify</button>
+    </section>
+
+    <section>
+      <h2>Network</h2>
       <button id="fetch">Fetch JSON</button>
+    </section>
+
+    <section>
+      <h2>Secure Store (keychain)</h2>
+      <button id="secret-set">Set secret</button>
+      <button id="secret-get">Get secret</button>
+      <button id="secret-delete">Delete secret</button>
+    </section>
+
+    <section>
+      <h2>HTTP Server</h2>
+      <button id="http-start">Start HTTP</button>
+      <button id="http-stop">Stop HTTP</button>
+    </section>
+
+    <section>
+      <h2>WebSocket Server</h2>
+      <button id="ws-start">Start WS</button>
+      <button id="ws-stop">Stop WS</button>
+    </section>
+
+    <section>
+      <h2>Child Windows</h2>
       <button id="open-window">Open external window</button>
       <button id="close-window">Close external window</button>
       <button id="window-body">Get window body</button>
       <button id="window-eval">Eval in window</button>
-    </div>
+    </section>
 
     <pre id="output">Ready.</pre>
 
@@ -53,6 +95,8 @@
         output.textContent =
           typeof value === "string" ? value : JSON.stringify(value, null, 2);
       }
+
+      // ── Files ────────────────────────────────────────────────────────
 
       document.getElementById("save").addEventListener("click", async () => {
         await shell.saveFile("note.txt", `Saved at ${new Date().toISOString()}`);
@@ -74,6 +118,8 @@
         show("Notification sent.");
       });
 
+      // ── Network ──────────────────────────────────────────────────────
+
       document.getElementById("fetch").addEventListener("click", async () => {
         const response = await shell.get(
           "https://jsonplaceholder.typicode.com/todos/1",
@@ -81,8 +127,111 @@
         show(response);
       });
 
-      // Child windows are for flows this window can't run itself, e.g. an
-      // external OAuth/login page you need to observe and drive from JS.
+      // ── Secure Store ─────────────────────────────────────────────────
+
+      document.getElementById("secret-set").addEventListener("click", async () => {
+        await shell.secretSet("demo-app", "example-key", "secret-value-42");
+        show("Secret stored in OS keychain.");
+      });
+
+      document.getElementById("secret-get").addEventListener("click", async () => {
+        try {
+          const value = await shell.secretGet("demo-app", "example-key");
+          show(`Retrieved: ${value}`);
+        } catch (error) {
+          show(String(error));
+        }
+      });
+
+      document.getElementById("secret-delete").addEventListener("click", async () => {
+        try {
+          await shell.secretDelete("demo-app", "example-key");
+          show("Secret deleted from OS keychain.");
+        } catch (error) {
+          show(String(error));
+        }
+      });
+
+      // ── HTTP Server ──────────────────────────────────────────────────
+
+      let httpUnlisten = null;
+      let httpRunning = false;
+
+      document.getElementById("http-start").addEventListener("click", async () => {
+        if (httpRunning) {
+          show("HTTP server already running.");
+          return;
+        }
+        const { port } = await shell.httpStart({ port: 0 });
+        httpRunning = true;
+        show(`HTTP server started on port ${port}`);
+
+        httpUnlisten = await shell.onHttpRequest(async (req) => {
+          const body = JSON.stringify({ ok: true, method: req.method, url: req.url });
+          await shell.httpRespond(req.id, 200, { "Content-Type": "application/json" }, body);
+        });
+      });
+
+      document.getElementById("http-stop").addEventListener("click", async () => {
+        if (!httpRunning) {
+          show("HTTP server not running.");
+          return;
+        }
+        await shell.httpStop();
+        if (httpUnlisten) httpUnlisten();
+        httpUnlisten = null;
+        httpRunning = false;
+        show("HTTP server stopped.");
+      });
+
+      // ── WebSocket Server ─────────────────────────────────────────────
+
+      let wsUnlistenConn = null;
+      let wsUnlistenMsg = null;
+      let wsUnlistenClose = null;
+      let wsRunning = false;
+
+      document.getElementById("ws-start").addEventListener("click", async () => {
+        if (wsRunning) {
+          show("WebSocket server already running.");
+          return;
+        }
+        const { port } = await shell.wsStart({ port: 0 });
+        wsRunning = true;
+        show(`WebSocket server started on port ${port}`);
+
+        wsUnlistenConn = await shell.onWsConnection(({ id }) => {
+          show(`Client connected: ${id}`);
+          shell.wsSend(id, "Welcome from app-ly!");
+        });
+
+        wsUnlistenMsg = await shell.onWsMessage(({ id, data }) => {
+          show(`Message from ${id}: ${data}`);
+        });
+
+        wsUnlistenClose = await shell.onWsClose(({ id }) => {
+          show(`Client disconnected: ${id}`);
+        });
+      });
+
+      document.getElementById("ws-stop").addEventListener("click", async () => {
+        if (!wsRunning) {
+          show("WebSocket server not running.");
+          return;
+        }
+        await shell.wsStop();
+        if (wsUnlistenConn) wsUnlistenConn();
+        if (wsUnlistenMsg) wsUnlistenMsg();
+        if (wsUnlistenClose) wsUnlistenClose();
+        wsUnlistenConn = null;
+        wsUnlistenMsg = null;
+        wsUnlistenClose = null;
+        wsRunning = false;
+        show("WebSocket server stopped.");
+      });
+
+      // ── Child Windows ────────────────────────────────────────────────
+
       let externalWindowId = null;
       let unlistenNav = null;
       let unlistenClosed = null;

@@ -82,4 +82,46 @@ window.shell = {
     window.__TAURI__.event.listen("shell://window-closed", (event) =>
       callback(event.payload.id),
     ),
+
+  // ── Secure Store (keyring-rs) ─────────────────────────────────────
+  secretSet: (service, account, password) =>
+    window.__TAURI__.core.invoke("shell_secret_set", { service, account, password }),
+  secretGet: (service, account) =>
+    window.__TAURI__.core.invoke("shell_secret_get", { service, account }),
+  secretDelete: (service, account) =>
+    window.__TAURI__.core.invoke("shell_secret_delete", { service, account }),
+
+  // ── HTTP Server ───────────────────────────────────────────────────
+  httpStart: (options = {}) =>
+    window.__TAURI__.core.invoke("shell_http_start", { port: options.port || null }),
+  httpRespond: (id, status, headers, body) =>
+    window.__TAURI__.core.invoke("shell_http_respond", { id, status, headers: headers || null, body: body || null }),
+  httpStop: () =>
+    window.__TAURI__.core.invoke("shell_http_stop"),
+  onHttpRequest: (callback) =>
+    window.__TAURI__.event.listen("shell://http-request", (event) =>
+      callback(event.payload),
+    ),
+
+  // ── WebSocket Server ──────────────────────────────────────────────
+  wsStart: (options = {}) =>
+    window.__TAURI__.core.invoke("shell_ws_start", { port: options.port || null }),
+  wsSend: (id, data) =>
+    window.__TAURI__.core.invoke("shell_ws_send", { id, data }),
+  wsClose: (id) =>
+    window.__TAURI__.core.invoke("shell_ws_close", { id }),
+  wsStop: () =>
+    window.__TAURI__.core.invoke("shell_ws_stop"),
+  onWsConnection: (callback) =>
+    window.__TAURI__.event.listen("shell://ws-connection", (event) =>
+      callback(event.payload),
+    ),
+  onWsMessage: (callback) =>
+    window.__TAURI__.event.listen("shell://ws-message", (event) =>
+      callback(event.payload),
+    ),
+  onWsClose: (callback) =>
+    window.__TAURI__.event.listen("shell://ws-close", (event) =>
+      callback(event.payload),
+    ),
 };

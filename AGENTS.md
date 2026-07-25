@@ -10,7 +10,7 @@ Generic Tauri desktop shell that loads app identity and UI from `app.toml`.
 - `contents/` — static HTML/JS/CSS loaded into the window
 - optional icon asset
 
-The shell exposes `window.shell` to contents HTML for persistence, logging, notifications, CORS-free HTTP, and SQLite databases stored in `dataPath`.
+The shell exposes `window.shell` to contents HTML for persistence, logging, notifications, CORS-free HTTP, and SQLite databases stored in `dataPath`, OS keychain secrets, HTTP/WebSocket servers.
 
 ## Config
 
@@ -21,7 +21,8 @@ icon = "icon.png"
 name = "My App"
 contents = "contents/index.html"
 dataPath = "data"
-showDevMenu = true  # optional; default true in debug, false in release
+showDevMenu = true      # optional; default true in debug, false in release
+keychainPrefix = "app"  # optional; prefix for OS keychain keys, default "app-ly"
 ```
 
 Discovery order at startup:
@@ -33,8 +34,7 @@ Discovery order at startup:
 Path resolution:
 
 - `icon` and `contents` are relative to the directory containing the loaded `app.toml`
-- `dataPath` in dev: relative to config directory
-- `dataPath` in release: under the app data directory (writable)
+- `dataPath`: always relative to the directory containing `app.toml` (both dev and release)
 
 Files:
 
@@ -48,10 +48,13 @@ Files:
 |------|----------------|
 | [`src-tauri/src/config.rs`](src-tauri/src/config.rs) | Load and parse `app.toml` |
 | [`src-tauri/src/paths.rs`](src-tauri/src/paths.rs) | Resolve icon, contents, data paths |
-| [`src-tauri/src/commands.rs`](src-tauri/src/commands.rs) | Invoke handlers for JS API |
+| [`src-tauri/src/commands.rs`](src-tauri/src/commands.rs) | Invoke handlers for JS API (files, fetch, windows, screens) |
 | [`src-tauri/src/db.rs`](src-tauri/src/db.rs) | SQLite query and execute handlers |
+| [`src-tauri/src/auth.rs`](src-tauri/src/auth.rs) | Shared-listener authViaBrowser with concurrent flow dispatch |
+| [`src-tauri/src/keyring.rs`](src-tauri/src/keyring.rs) | OS keychain secret set/get/delete |
+| [`src-tauri/src/server.rs`](src-tauri/src/server.rs) | Embedded HTTP server and WebSocket server |
 | [`src-tauri/src/menu.rs`](src-tauri/src/menu.rs) | Native app menu (Reload, Open DevTools) |
-| [`src-tauri/src/lib.rs`](src-tauri/src/lib.rs) | App setup, `shell://` protocol, window creation, init script |
+| [`src-tauri/src/lib.rs`](src-tauri/src/lib.rs) | App setup, `shell://` protocol, window creation, init script, state managers |
 
 See [`_docs/project-structure.md`](_docs/project-structure.md) for the full repo layout.
 
@@ -68,6 +71,13 @@ Injected as `window.shell` before page scripts run. Keyboard shortcuts are injec
 - `getScreens()`, `getScreenAt(x, y)` — display sizes and multi-monitor info
 - `dbQuery(dbName, query, params?)` — tabular SELECT results
 - `dbExecute(dbName, query, params?)` — DML / scalar writes, returns changes + row id
+- `secretSet(service, account, password)` — OS keychain store
+- `secretGet(service, account)` — OS keychain retrieve
+- `secretDelete(service, account)` — OS keychain delete
+- `httpStart(options?)`, `httpRespond(id, status, headers?, body?)`, `httpStop()` — local HTTP server
+- `onHttpRequest(callback)` — incoming HTTP request events
+- `wsStart(options?)`, `wsSend(id, data)`, `wsClose(id)`, `wsStop()` — local WebSocket server
+- `onWsConnection(callback)`, `onWsMessage(callback)`, `onWsClose(callback)` — WebSocket events
 
 Dev shortcuts (when `showDevMenu` is enabled):
 
