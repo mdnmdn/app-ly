@@ -36,6 +36,14 @@ commands.allow = [
   "shell_ws_send",
   "shell_ws_close",
   "shell_ws_stop",
+  "shell_run",
+  "shell_spawn",
+  "shell_process_write",
+  "shell_process_close_stdin",
+  "shell_process_kill",
+  "shell_process_exit",
+  "shell_process_set_timeout",
+  "shell_list_commands",
 ]
 
 # Reported by a child window's own script (via window.__TAURI__.core.invoke)

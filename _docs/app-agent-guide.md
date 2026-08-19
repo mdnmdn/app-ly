@@ -71,6 +71,12 @@ keychainPrefix = "my-app"     # optional. prefix for OS keychain keys, default "
 
 [settings]                    # optional. string-only key/value map, exposed as shell.settings
 apiBaseUrl = "https://api.example.com"
+
+[[allowedCommands]]           # optional, repeatable. programs shell.run/shell.spawn may start
+name = "git"                  # the alias your JS passes to run/spawn
+program = "git"               # bare name (resolved via PATH) or absolute path
+args = ["^(status|log)$"]     # optional. one anchored regex per argument position
+timeoutMs = 30000             # optional. default timeout for this command
 ```
 
 Rules and gotchas:
@@ -82,6 +88,7 @@ Rules and gotchas:
 - `[settings]` values must be TOML strings (`key = "value"`) — this is an env-var-shaped map, not a general config tree. Quote numbers/booleans too if you put them here; your JS gets them back as strings either way.
 - A `.env` file (plain `KEY=VALUE` lines, `#` comments, optional quotes) placed next to `app.toml` is merged on top of `[settings]` and **wins on key collisions**. Use `[settings]` for checked-in defaults, `.env` for local overrides and secrets you don't want in version control — and make sure `.env` is in `.gitignore`.
 - Discovery order: `--config <path>` flag → folder containing the `app-ly.app` bundle/executable (this is the normal case — your `app.toml` sits right next to the binary you copied in) → bundled fallback resource baked into the binary itself → (dev-only) `./app.toml` in cwd → project root `app.toml`. As an app author you don't need `--config` at all: just keep `app.toml` next to the binary and it's found automatically. `--config` is only useful for testing multiple app folders against one shared binary without copying it around.
+- `[[allowedCommands]]` is the only way your contents HTML can start a program, and every field of it (`program`, `cwd`, `env`, the argument patterns) lives here in `app.toml`, never in JS. No entries at all means process execution is fully disabled — which is the right setting unless you actually need it. See [Running programs](#running-programs--run--spawn--listcommands) below.
 - For a real release, you also need to point `src-tauri/tauri.conf.json`'s `bundle.resources` at your `contents/`, `icon`, and a copy of your `app.toml` (as `bundle/app.toml`), per [`_docs/README.md`](README.md). That's a shell-repo change, not something your contents HTML controls.
 
 ## Path rules inside the app (filenames, not paths)
@@ -147,6 +154,9 @@ Available immediately on `window` before your page scripts run. Every method ret
 | `onWsConnection` | `(callback) → unlisten` | Subscribe to new WebSocket client connections |
 | `onWsMessage` | `(callback) → unlisten` | Subscribe to WebSocket text messages |
 | `onWsClose` | `(callback) → unlisten` | Subscribe to WebSocket client disconnections |
+| `run` | `(name, args?, options?) → { stdout, stderr, code, signal, timedOut }` | Run an allowlisted program to completion |
+| `spawn` | `(name, args?, options?) → ChildProcess` | Start an allowlisted program and stream its output |
+| `listCommands` | `() → [{ name, program, argsRestricted, timeoutMs }]` | List the `[[allowedCommands]]` entries this app was configured with |
 
 `name`/`dbName` arguments are always simple filenames — see [path rules](#path-rules-inside-the-app-filenames-not-paths) above. Window/screen methods are rarely needed — see [below](#window-and-screen--mostly-skip-these). Child-window methods are covered [below](#child-windows--openwindow--closewindow--onwindownavigated--onwindowclosed).
 
@@ -436,6 +446,57 @@ await shell.wsStop();
 - Events: `onWsConnection({ id })`, `onWsMessage({ id, data })`, `onWsClose({ id })`. Each returns an `UnlistenFn`.
 - Only text messages are supported (binary frames are silently ignored).
 
+### Running programs — `run` / `spawn` / `listCommands`
+
+Your app can shell out to local programs — but only to programs *you* listed in `app.toml`, by the `name` you gave them. There is no "run this command line" call: the page picks a listed entry and supplies arguments, nothing more.
+
+```toml
+# app.toml
+[[allowedCommands]]
+name = "git"                                  # the alias your JS passes to run/spawn
+program = "git"                               # bare name (found on PATH) or an absolute path
+args = ["^(status|log|diff)$", "^--oneline$"] # optional: one regex per argument position
+extraArgs = "^[\\w./-]+$"                     # optional: pattern for every argument past `args`
+maxArgs = 8                                   # optional: hard cap on argument count
+cwd = "repo"                                  # optional: relative to this app.toml's directory
+timeoutMs = 30000                             # optional: default timeout for this command
+env = { GIT_PAGER = "cat" }                   # optional: extra env vars for the child
+```
+
+```javascript
+// one-shot: wait for it, get everything it printed
+const { stdout, stderr, code, timedOut } = await shell.run("git", ["status"], {
+  timeoutMs: 5000,
+});
+if (code !== 0) show(stderr);
+
+// streaming: react to output as it arrives
+const proc = await shell.spawn("git", ["log", "--oneline"]);
+proc.onStdout((data) => (out.textContent += data));
+const { code: exitCode } = await proc.exited;
+
+// ...or consume the output as an async iterable instead of with handlers
+for await (const { stream, data } of await shell.spawn("git", ["log"])) {
+  out.textContent += data;
+}
+```
+
+Practice:
+
+- **The allowlist is the security boundary, and it is only as tight as you write it.** Omitting both `args` and `extraArgs` means *any* arguments are accepted for that program — an unrestricted `git` entry allows `git push --force`. Add patterns (and `maxArgs`) to anything that isn't harmless.
+- **Patterns are fully anchored for you.** Each one is compiled as `^(?:P)$`, so `"status"` matches `status` and not `xstatusy`. Writing your own `^...$` is fine and changes nothing.
+- Positional patterns line up with argument indexes; arguments beyond the list are rejected unless `extraArgs` is set, and passing fewer arguments than there are patterns is always fine.
+- **Nothing runs through a shell.** No pipes, globs, `&&`, redirection, or quoting — arguments reach the program verbatim. That removes shell injection as a concern, and it also means "one command line" tricks don't work: sequence the steps in JS instead.
+- **`program`, `cwd`, and `env` are config-only** and can never be passed from JS. That's deliberate. If your app needs a different working directory, add a second `[[allowedCommands]]` entry for it.
+- **Know what rejects and what doesn't.** An unknown `name`, an argument that fails a pattern, a bad regex in your config, or a missing executable all **reject**. A program that runs and exits non-zero **resolves** — you must check `code` yourself. So does a timeout: the child is killed and the call resolves with `timedOut: true` plus whatever output it had produced.
+- Timeouts resolve in this order: the call's `options.timeoutMs`, else the entry's `timeoutMs`, else no timeout at all. Give anything long-running one, or a hung child sticks around for the life of the app.
+- `code` is `null` when the process was killed or signalled instead of exiting normally; `signal` only ever has a value on Unix (always `null` on Windows).
+- `spawn` gives you a process object: `id`, `pid`, `onStdout`/`onStderr`/`onExit` (each returning an unsubscribe function), `write(data)` / `closeStdin()` for stdin, `exit()` / `kill()` / `setTimeout(ms)` for controlling it, an `exited` promise, and `for await (const { stream, data } of proc)`. Output produced before you attach a handler is buffered and replayed, so you can't lose the first chunk by attaching late.
+- Stop a process with `exit()` (asks politely — `SIGTERM`, so the child can clean up) and reach for `kill()` only when it must die now. `exit()` resolves when the signal was *sent*; await `exited` to know the process is actually gone.
+- You are not stuck with the timeout you spawned with: `setTimeout(ms)` re-arms the deadline from the moment you call it, so you can extend a job that turned out to be slow, put a deadline on a process spawned without one, or call it on every chunk to get an inactivity timeout. `setTimeout(null)` clears it.
+- `listCommands()` returns `{ name, program, argsRestricted, timeoutMs }` for each entry — use it to grey out features when an app deployment wasn't configured with the command it needs. `cwd`/`env` values are never exposed to JS.
+- Use `run` for anything that finishes quickly and `spawn` for anything long, chatty, or interactive. `run` buffers everything in memory before it resolves.
+
 ### What you get for free, unprompted
 
 - Keyboard shortcuts (`Cmd/Ctrl+Shift+M/I` devtools toggle, `Cmd/Ctrl+Shift+R` reload) and the View menu are injected automatically — don't build your own reload/devtools UI.
@@ -446,6 +507,7 @@ await shell.wsStop();
 
 - `readFile`/`deleteFile`/`renameFile`/`openFile`/`openFileLocation` on a missing file — expected whenever the file might not have been created yet, catch it and fall back to defaults.
 - `fetch` network failures — catch and show the user something, don't let it crash silent.
+- A non-zero `code` (or `timedOut: true`) from `run`/`spawn` — these *resolve*, so nothing throws; check the result and tell the user. A rejected `run`/`spawn`, by contrast, means the command isn't allowlisted or your arguments don't match the configured patterns — that's a config/programming error.
 - Everything else (invalid filename, invalid SQL, bad URL scheme) is a programming error on your part — fix the call, don't defensively swallow it.
 
 ## Full reference example
@@ -592,3 +654,4 @@ await shell.wsStop();
 7. Tested by launching the `app-ly` binary from your app's folder (or `npm run tauri dev -- --config ./yourapp/app.toml` if working from a shell checkout), including the cold-start case (no existing `dataPath` files).
 8. Sensitive credentials use `secretSet`/`secretGet` (OS keychain) instead of `saveFile` for anything you'd call a secret.
 9. If using the HTTP or WebSocket server, handle the "already running" error gracefully in your UI.
+10. Any `[[allowedCommands]]` entry is as narrow as it can be (argument patterns, `maxArgs`, a `timeoutMs`), and the UI handles both a non-zero exit code and `timedOut`.

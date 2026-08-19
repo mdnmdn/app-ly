@@ -601,6 +601,239 @@ await shell.onWsClose(({ id }) => {
 });
 ```
 
+## Running programs (`[[allowedCommands]]`)
+
+`shell.run` and `shell.spawn` execute local programs. There is no general "run this command line" API — a program can only be started if the app author listed it in `app.toml` under `[[allowedCommands]]`, and JS refers to it by the `name` given there.
+
+```toml
+[[allowedCommands]]
+name = "git"                                  # required. Alias JS passes to shell.run/spawn. Unique.
+program = "git"                               # required. Executable: bare name (resolved via PATH) or absolute path.
+args = ["^(status|log|diff)$", "^--oneline$"] # optional. Positional regex allowlist, one pattern per arg index.
+extraArgs = "^[\\w./-]+$"                     # optional. Pattern for every arg beyond the ones in `args`.
+maxArgs = 8                                   # optional. Hard cap on argument count.
+cwd = "repo"                                  # optional. Working directory, relative to the app.toml directory (absolute paths allowed). Default: the app.toml directory.
+timeoutMs = 30000                             # optional. Default timeout when the JS caller does not pass one. Absent = no timeout.
+env = { GIT_PAGER = "cat" }                   # optional. Extra env vars, merged over the inherited environment.
+```
+
+Repeat the `[[allowedCommands]]` block once per program. Omitting the table entirely means no process execution is possible at all — every `run`/`spawn` call rejects.
+
+### Security model
+
+- **The allowlist is the entire policy.** Only a listed `program` can run, and only under its own `name`. Nothing else on the machine is reachable through this API.
+- **Nothing goes through a shell.** `app-ly` always spawns the executable directly (`Command::new(program).args(...)`), never `sh -c` / `cmd /c`. There is no shell-injection surface, and equally no globbing, pipes, redirection, `&&`, or quoting rules — every argument reaches the program verbatim. Chain steps in JS instead of in a command line.
+- **`program`, `cwd`, and `env` come from `app.toml` only.** JS can never supply them. This is a deliberate limitation: a page can pick a listed command and pass arguments, and that is all. Per call, JS supplies exactly the entry `name`, an argument array, and `timeoutMs` / `stdin`.
+- **Patterns are implicitly fully anchored.** Each configured pattern `P` is compiled as `^(?:P)$` ([Rust `regex` syntax](https://docs.rs/regex/latest/regex/#syntax)). So `"status"` matches only `status` — it does **not** match `xstatusy`. Writing `"^status$"` yourself is fine too; the anchors nest harmlessly.
+- **Omitting both `args` and `extraArgs` leaves arguments unrestricted** for that program — the allowlist then constrains only *which* executable runs, not what it is asked to do. This is the loosest possible setting: an unrestricted `git` entry permits `git push --force`. Regex limiting is opt-in, so add at least `extraArgs` (and ideally `maxArgs`) to anything that isn't trivially harmless.
+- `env` values are never exposed to JS — `shell.listCommands()` reports only `name`, `program`, `argsRestricted`, and `timeoutMs`.
+
+### Argument matching rules
+
+- Neither `args` nor `extraArgs` present → any arguments are accepted (still subject to `maxArgs`).
+- `args` present → the argument at index `i` must match `args[i]`.
+- Arguments at index ≥ `args.length` are **rejected**, unless `extraArgs` is set — then each of them must match `extraArgs`.
+- `extraArgs` present without `args` → every argument must match `extraArgs`.
+- Passing **fewer** arguments than there are patterns is allowed; trailing positional patterns are optional.
+- More arguments than `maxArgs` → rejected.
+- An invalid regex in the config does not crash startup: `run`/`spawn` for that one entry reject with an error naming the entry and the bad pattern.
+
+Rejection messages are actionable, e.g. `command "git": argument 1 ("push") does not match allowed pattern ^(status|log|diff)$`.
+
+### What rejects vs. what resolves
+
+The promise rejects only on **policy or spawn** failures. A program that runs and fails is a normal result, not an error.
+
+| Situation | Outcome |
+|-----------|---------|
+| No `[[allowedCommands]]` entry with that `name` | **Rejects** — `no allowed command named "curl" — add an [[allowedCommands]] entry to app.toml` |
+| An argument fails its pattern, or `maxArgs` is exceeded | **Rejects** |
+| Invalid regex in that entry's config | **Rejects** |
+| Executable not found / cannot be spawned | **Rejects** |
+| Program ran and exited non-zero | **Resolves** — check `code` yourself |
+| Timeout elapsed and the child was killed | **Resolves** with `timedOut: true` and the output collected so far |
+| `write` / `closeStdin` / `exit` / `kill` / `setTimeout` on a process that already exited | **Rejects** — `process proc-3 not found or already exited`. Guard with `exited` if the process may have finished |
+
+### Timeouts
+
+The effective timeout is the per-call `options.timeoutMs` if given, otherwise the entry's `timeoutMs`, otherwise none (the child may run forever). On timeout the child is killed and the call **resolves** with `timedOut: true` — it never rejects — carrying whatever output had been collected. `code` is `null` whenever the process was killed or signalled rather than exiting on its own. `signal` is Unix-only and is always `null` on Windows.
+
+For a spawned process the timeout is not fixed at spawn time — `proc.setTimeout(ms)` re-arms it from the moment you call it, and `proc.setTimeout(null)` removes it. See [`shell.spawn`](#shellspawnname-args-options).
+
+## `shell.run(name, args?, options?)`
+
+Runs an allowlisted program to completion and returns everything it produced. The wait happens off the UI thread, so the webview stays responsive.
+
+- `name` — the `name` of an `[[allowedCommands]]` entry
+- `args` — optional array of string arguments (default `[]`), validated against that entry
+- `options` — optional object:
+  - `timeoutMs` — kill the child after this many milliseconds; overrides the entry's `timeoutMs`
+  - `stdin` — string written to the child's stdin, which is then closed
+- Returns: `Promise<{ stdout, stderr, code, signal, timedOut }>`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `stdout` | `string` | Everything written to stdout |
+| `stderr` | `string` | Everything written to stderr |
+| `code` | `number \| null` | Exit status; `null` if the process was killed or signalled |
+| `signal` | `number \| null` | Terminating signal (Unix only; always `null` on Windows) |
+| `timedOut` | `boolean` | `true` if the child was killed because the timeout elapsed |
+
+When the second argument is a non-array object it is treated as `options`, so `shell.run("echo", { timeoutMs: 1000 })` runs the command with no arguments.
+
+```javascript
+const { stdout, stderr, code, timedOut } = await shell.run("git", ["status"], {
+  timeoutMs: 5000,
+});
+
+if (timedOut) {
+  console.warn("git status took too long");
+} else if (code !== 0) {
+  console.error("git failed:", code, stderr);
+} else {
+  console.log(stdout);
+}
+```
+
+Feeding the child stdin:
+
+```javascript
+const { stdout } = await shell.run("wc", ["-l"], { stdin: "a\nb\nc\n" });
+```
+
+## `shell.spawn(name, args?, options?)`
+
+Starts an allowlisted program and streams its output as it arrives, instead of waiting for it to finish. Use it for long-running or chatty commands, or when you need to write to stdin while the process runs.
+
+- `name` — the `name` of an `[[allowedCommands]]` entry
+- `args` — optional array of string arguments (default `[]`), validated exactly as in `shell.run`
+- `options` — optional object:
+  - `timeoutMs` — kill the child after this many milliseconds; overrides the entry's `timeoutMs`
+- Returns: `Promise<ChildProcess>` — resolves once the process has been spawned
+
+The same 2-argument overload applies: `shell.spawn("ping", { timeoutMs: 10000 })`.
+
+The resolved `ChildProcess` object:
+
+| Member | Type | Description |
+|--------|------|-------------|
+| `id` | `string` | Shell-assigned process id (e.g. `"proc-0"`), used by the underlying events |
+| `pid` | `number \| null` | OS process id, when the platform reports one |
+| `onStdout(cb)` | `(data: string) => void` → `unsubscribe` | Called with each stdout chunk as it arrives |
+| `onStderr(cb)` | `(data: string) => void` → `unsubscribe` | Called with each stderr chunk as it arrives |
+| `onExit(cb)` | `({ code, signal, timedOut }) => void` → `unsubscribe` | Called once, when the process ends |
+| `write(data)` | `(string) => Promise<void>` | Writes to the child's stdin |
+| `closeStdin()` | `() => Promise<void>` | Closes stdin, so the child sees EOF |
+| `kill()` | `() => Promise<void>` | Forcefully kills the child (`SIGKILL` on Unix) — it cannot clean up |
+| `exit()` | `() => Promise<{ graceful }>` | Asks the child to exit (`SIGTERM` on Unix) so it can run its own shutdown |
+| `setTimeout(ms)` | `(number \| null) => Promise<void>` | Sets the timeout **while the process runs**, counted from now; `null` clears it |
+| `exited` | `Promise<{ code, signal, timedOut }>` | Resolves once the process ends; never rejects |
+| `[Symbol.asyncIterator]` | yields `{ stream, data }` | `for await` over all output; `stream` is `"stdout"` or `"stderr"` |
+
+Behavior worth relying on:
+
+- Each `onStdout` / `onStderr` / `onExit` returns an **unsubscribe function** — call it to stop receiving that stream.
+- **No output is lost.** Chunks that arrive before you attach a handler are queued and flushed to the first handler registered for that stream, and an `onExit` handler attached after the process already ended still fires.
+- `exited` resolves the same way whether you await it before or after the process ends, and resolves (never rejects) even on kill or timeout — `code` is then `null` and `timedOut` tells you which it was.
+- Async iteration yields chunks in arrival order and ends when the process exits; chunks produced while you are awaiting the next value are queued, and starting iteration after some output has arrived still replays it.
+- `exit()` is the polite stop and `kill()` is the forceful one. `exit()` sends `SIGTERM`, which the child may trap, delay, or ignore entirely — so it resolves when the *signal was sent*, not when the process is gone. Await `exited` to know it actually stopped. It resolves `{ graceful: true }` on Unix; on Windows there is no `SIGTERM`, so it falls back to a forceful kill and reports `{ graceful: false }`.
+- `setTimeout(ms)` re-arms the deadline from the moment you call it, so it both extends and shortens: it works on a process spawned with no timeout at all, and calling it repeatedly (say, on each chunk of output) gives you an **inactivity timeout**. `setTimeout(null)` removes the deadline. A timeout that fires kills the process the same way a spawn-time timeout does — `exited` resolves with `timedOut: true`.
+- Under the hood `app-ly` listens on the `shell://process-stdout`, `shell://process-stderr`, and `shell://process-exit` events and dispatches them by `id` — `shell.spawn` subscribes for you, so there is no `onProcess*` API to call yourself.
+
+Streaming output into the DOM:
+
+```javascript
+const proc = await shell.spawn("git", ["log", "--oneline"], { timeoutMs: 10000 });
+const out = document.getElementById("out");
+
+const stopOut = proc.onStdout((data) => {
+  out.textContent += data;
+});
+proc.onStderr((data) => console.warn("stderr:", data));
+
+const { code, signal, timedOut } = await proc.exited;
+stopOut();
+out.textContent += `\n[exit code=${code} signal=${signal} timedOut=${timedOut}]`;
+```
+
+The same thing as an async iteration, with a cancel button:
+
+```javascript
+const proc = await shell.spawn("ping", ["-c", "5", "127.0.0.1"]);
+
+cancelButton.onclick = () => proc.kill();
+
+for await (const { stream, data } of proc) {
+  out.textContent += stream === "stderr" ? `! ${data}` : data;
+}
+
+const { code, timedOut } = await proc.exited;
+```
+
+Driving a process through stdin:
+
+```javascript
+const proc = await shell.spawn("sort");
+
+proc.onStdout((data) => (out.textContent += data));
+
+await proc.write("banana\n");
+await proc.write("apple\n");
+await proc.closeStdin(); // sort only produces output once its input ends
+
+await proc.exited;
+```
+
+Stopping a process politely, with a deadline as the fallback:
+
+```javascript
+const proc = await shell.spawn("server", ["--watch"]);
+
+stopButton.onclick = async () => {
+  await proc.exit();          // ask it to shut down cleanly
+  await proc.setTimeout(5000); // but don't wait forever
+};
+
+const { code, timedOut } = await proc.exited;
+if (timedOut) console.warn("it ignored SIGTERM and was killed");
+```
+
+An inactivity timeout — re-arm the deadline on every chunk, so the process is
+killed only after it has been quiet for 10 seconds:
+
+```javascript
+const proc = await shell.spawn("tailer", ["app.log"]);
+await proc.setTimeout(10000);
+proc.onStdout(async (data) => {
+  out.textContent += data;
+  await proc.setTimeout(10000); // reset the clock
+});
+```
+
+## `shell.listCommands()`
+
+Lists the `[[allowedCommands]]` entries the running app was configured with — for building a UI (a picker, a diagnostics panel) or for checking whether a command is available before offering it.
+
+- Returns: `Promise<Array<{ name, program, argsRestricted, timeoutMs }>>`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | `string` | The alias to pass to `run` / `spawn` |
+| `program` | `string` | The configured executable |
+| `argsRestricted` | `boolean` | `true` if the entry sets any of `args`, `extraArgs`, or `maxArgs` |
+| `timeoutMs` | `number \| null` | The entry's default timeout, if it has one |
+
+`cwd` and `env` are never reported.
+
+```javascript
+const commands = await shell.listCommands();
+// [{ name: "git", program: "git", argsRestricted: true, timeoutMs: 30000 }]
+
+if (!commands.some((c) => c.name === "git")) {
+  show("This app was configured without git access.");
+}
+```
+
 ## `shell.dbQuery(dbName, query, params?)`
 
 Runs a read query against a SQLite database stored in `dataPath`. The database file is created on first use if it does not exist.
@@ -669,6 +902,8 @@ Common cases:
 - Unknown window `id`, or `id: "main"`, passed to `closeWindow`
 - The platform opener binary is missing (e.g. `xdg-open` not installed) in `openFile`/`openFileLocation` or `authViaBrowser`
 - Invalid/non-loopback `returnUrl`, backend redirect with `?error=...`, or timeout in `authViaBrowser`
+- Unknown command name, an argument rejected by an `[[allowedCommands]]` pattern, an invalid regex in that entry, or a missing executable in `run`/`spawn` — note that a non-zero exit status is *not* an error, it resolves with `code` set
+- Unknown or already-exited process id passed to a `ChildProcess`'s `write`/`closeStdin`/`kill`
 
 ## Full example
 
@@ -715,3 +950,9 @@ Common cases:
 - The HTTP server reads the full request body into a string before emitting the event (no streaming support)
 - The WebSocket server only supports text messages — binary frames are silently ignored
 - Only one HTTP server and one WebSocket server can run at a time; calling `httpStart`/`wsStart` while one is already running returns an error
+- `run`/`spawn` can only start programs listed in `[[allowedCommands]]`; `program`, `cwd`, and `env` come from `app.toml` only and can never be supplied from JS
+- No shell interpreter is involved in `run`/`spawn` — no pipes, globs, redirection, or `&&`; compose steps in JS instead
+- Child process output is decoded as UTF-8 (lossily) into strings — binary stdout/stderr is not supported
+- `proc.exit()` sends `SIGTERM` on Unix, which a child may trap, delay, or ignore — it reports that the signal was sent, not that the process stopped. Windows has no `SIGTERM`, so it falls back to a forceful kill and resolves `{ graceful: false }`
+- Timeouts are checked on a short poll rather than a precise timer, so a deadline can fire up to ~20ms late
+- `signal` on a process result is Unix-only and always `null` on Windows

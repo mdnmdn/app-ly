@@ -3,3 +3,14 @@ name = "Shell Example"
 contents = "example/contents/index.html"
 dataPath = "example/data"
 keychainPrefix = "app-ly-dev"
+
+# Programs the contents HTML may run via `shell.run` / `shell.spawn`.
+[[allowedCommands]]
+name = "echo"
+program = "echo"
+
+[[allowedCommands]]
+name = "ping"
+program = "ping"
+args = ["^-c$", "^[1-9]$", "^(127\\.0\\.0\\.1|localhost)$"]
+timeoutMs = 10000

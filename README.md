@@ -8,9 +8,10 @@ build step, or native toolchain required.
 
 One prebuilt shell binary + your `contents/` HTML *is* your app. The shell exposes
 `window.shell` to that HTML for the things plain web pages can't do: persistent files,
-SQLite databases, CORS-free HTTP, desktop notifications, window/screen control, and child
-windows for flows like OAuth. Instead of hard-coding a UI into the Rust/Tauri project, each
-deployment just supplies its own `app.toml` + `contents/` + icon.
+SQLite databases, CORS-free HTTP, desktop notifications, window/screen control, child
+windows for flows like OAuth, and running local programs from an `app.toml` allowlist.
+Instead of hard-coding a UI into the Rust/Tauri project, each deployment just supplies its
+own `app.toml` + `contents/` + icon.
 
 ## Quick start (authoring an app)
 

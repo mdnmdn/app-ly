@@ -10,7 +10,7 @@ Generic Tauri desktop shell that loads app identity and UI from `app.toml`.
 - `contents/` — static HTML/JS/CSS loaded into the window
 - optional icon asset
 
-The shell exposes `window.shell` to contents HTML for persistence, logging, notifications, CORS-free HTTP, and SQLite databases stored in `dataPath`, OS keychain secrets, HTTP/WebSocket servers.
+The shell exposes `window.shell` to contents HTML for persistence, logging, notifications, CORS-free HTTP, and SQLite databases stored in `dataPath`, OS keychain secrets, HTTP/WebSocket servers, and allowlisted subprocess execution.
 
 ## Config
 
@@ -23,7 +23,19 @@ contents = "contents/index.html"
 dataPath = "data"
 showDevMenu = true      # optional; default true in debug, false in release
 keychainPrefix = "app"  # optional; prefix for OS keychain keys, default "app-ly"
+
+[[allowedCommands]]                            # optional, repeatable; absent = no process execution
+name = "git"                                   # required; alias JS passes to shell.run/spawn
+program = "git"                                # required; bare name (PATH) or absolute path
+args = ["^(status|log|diff)$", "^--oneline$"]  # optional; positional regex allowlist, implicitly anchored
+extraArgs = "^[\\w./-]+$"                      # optional; pattern for every arg beyond `args`
+maxArgs = 8                                    # optional; hard cap on argument count
+cwd = "repo"                                   # optional; relative to the app.toml directory
+timeoutMs = 30000                              # optional; default timeout, absent = no timeout
+env = { GIT_PAGER = "cat" }                    # optional; merged over the inherited environment
 ```
+
+Omitting both `args` and `extraArgs` leaves arguments unrestricted for that program. Commands never run through a shell, and `program`/`cwd`/`env` can only come from config, never from JS.
 
 Discovery order at startup:
 
@@ -53,6 +65,7 @@ Files:
 | [`src-tauri/src/auth.rs`](src-tauri/src/auth.rs) | Shared-listener authViaBrowser with concurrent flow dispatch |
 | [`src-tauri/src/keyring.rs`](src-tauri/src/keyring.rs) | OS keychain secret set/get/delete |
 | [`src-tauri/src/server.rs`](src-tauri/src/server.rs) | Embedded HTTP server and WebSocket server |
+| [`src-tauri/src/process.rs`](src-tauri/src/process.rs) | Allowlisted subprocess execution (`shell_run`, `shell_spawn`, stdin, exit/kill, runtime timeout, allowlist introspection) |
 | [`src-tauri/src/menu.rs`](src-tauri/src/menu.rs) | Native app menu (Reload, Open DevTools) |
 | [`src-tauri/src/lib.rs`](src-tauri/src/lib.rs) | App setup, `shell://` protocol, window creation, init script, state managers |
 
@@ -78,6 +91,9 @@ Injected as `window.shell` before page scripts run. Keyboard shortcuts are injec
 - `onHttpRequest(callback)` — incoming HTTP request events
 - `wsStart(options?)`, `wsSend(id, data)`, `wsClose(id)`, `wsStop()` — local WebSocket server
 - `onWsConnection(callback)`, `onWsMessage(callback)`, `onWsClose(callback)` — WebSocket events
+- `run(name, args?, options?)` — run an allowlisted program to completion, returns stdout/stderr/exit
+- `spawn(name, args?, options?)` — streaming child process (`onStdout`/`onStderr`/`onExit`, `write`, `exit`/`kill`, `setTimeout`, `exited`, async iteration)
+- `listCommands()` — the `[[allowedCommands]]` entries this app was configured with
 
 Dev shortcuts (when `showDevMenu` is enabled):
 

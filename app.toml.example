@@ -13,3 +13,24 @@ showDevMenu = true  # optional; default true in debug, false in release
 # wins on conflicts — keep secrets/local overrides there instead of in this file.
 [settings]
 apiBaseUrl = "https://api.example.com"
+
+# optional; programs the contents HTML may run via `shell.run` / `shell.spawn`.
+# Absent = no process execution at all. Commands never go through a shell.
+# `program`, `cwd` and `env` come from this file only — JS supplies just the
+# `name`, an argument array and a per-call timeout/stdin.
+# Argument patterns are Rust regexes, implicitly fully anchored (`P` becomes
+# `^(?:P)$`); writing your own `^...$` is harmless. With neither `args` nor
+# `extraArgs` set, any arguments are accepted.
+[[allowedCommands]]
+name = "echo"     # required; the alias JS passes to shell.run/shell.spawn (unique)
+program = "echo"  # required; bare name resolved via PATH, or an absolute path
+
+[[allowedCommands]]
+name = "git"
+program = "git"
+args = ["^(status|log|diff)$", "^--oneline$"]  # optional; one pattern per argument index
+extraArgs = "^[\\w./-]+$"                      # optional; pattern for every arg beyond `args`
+maxArgs = 8                                    # optional; hard cap on argument count
+cwd = "repo"                                   # optional; relative to this file (absolute allowed)
+timeoutMs = 30000                              # optional; default when the JS caller passes none
+env = { GIT_PAGER = "cat" }                    # optional; merged over the inherited environment

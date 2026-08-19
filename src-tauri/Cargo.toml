@@ -27,3 +27,7 @@ open = "5"
 keyring = "4"
 tiny_http = "0.12"
 tungstenite = "0.24"
+regex = "1"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

@@ -18,6 +18,29 @@ pub struct ShellConfig {
     pub keychain_prefix: Option<String>,
     #[serde(default)]
     pub settings: Option<HashMap<String, String>>,
+    #[serde(rename = "allowedCommands", default)]
+    pub allowed_commands: Vec<CommandEntry>,
+}
+
+/// One `[[allowedCommands]]` entry. `program`, `cwd` and `env` come from
+/// config only — the webview can never supply them.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandEntry {
+    pub name: String,
+    pub program: String,
+    #[serde(default)]
+    pub args: Option<Vec<String>>,
+    #[serde(default)]
+    pub extra_args: Option<String>,
+    #[serde(default)]
+    pub max_args: Option<usize>,
+    #[serde(default)]
+    pub cwd: Option<String>,
+    #[serde(default)]
+    pub timeout_ms: Option<u64>,
+    #[serde(default)]
+    pub env: Option<HashMap<String, String>>,
 }
 
 pub fn default_show_dev_menu() -> bool {

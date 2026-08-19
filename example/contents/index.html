@@ -79,6 +79,12 @@
     </section>
 
     <section>
+      <h2>Run a command</h2>
+      <button id="run-echo">Run echo</button>
+      <button id="spawn-ping">Stream ping</button>
+    </section>
+
+    <section>
       <h2>Child Windows</h2>
       <button id="open-window">Open external window</button>
       <button id="close-window">Close external window</button>
@@ -228,6 +234,48 @@
         wsUnlistenClose = null;
         wsRunning = false;
         show("WebSocket server stopped.");
+      });
+
+      // ── Run a command ────────────────────────────────────────────────
+
+      document.getElementById("run-echo").addEventListener("click", async () => {
+        try {
+          const result = await shell.run("echo", ["hello from app-ly"], {
+            timeoutMs: 5000,
+          });
+          show(
+            [
+              `exit code: ${result.code}`,
+              `signal: ${result.signal}`,
+              `timed out: ${result.timedOut}`,
+              "",
+              `stdout: ${result.stdout}`,
+              `stderr: ${result.stderr}`,
+            ].join("\n"),
+          );
+        } catch (error) {
+          show(String(error));
+        }
+      });
+
+      document.getElementById("spawn-ping").addEventListener("click", async () => {
+        try {
+          const proc = await shell.spawn("ping", ["-c", "3", "127.0.0.1"], {
+            timeoutMs: 10000,
+          });
+          let text = `ping (${proc.id}, pid ${proc.pid})\n\n`;
+          show(text);
+
+          for await (const { stream, data } of proc) {
+            text += stream === "stderr" ? `[stderr] ${data}` : data;
+            show(text);
+          }
+
+          const { code, timedOut } = await proc.exited;
+          show(`${text}\n-- exit code ${code}${timedOut ? " (timed out)" : ""}`);
+        } catch (error) {
+          show(String(error));
+        }
       });
 
       // ── Child Windows ────────────────────────────────────────────────

@@ -5,6 +5,7 @@ mod db;
 mod keyring;
 mod menu;
 mod paths;
+mod process;
 mod server;
 
 use auth::shell_auth_via_browser;
@@ -18,12 +19,16 @@ use commands::{
 };
 use config::{
     config_fallback_html, default_show_dev_menu, discover_config, effective_show_dev_menu,
-    load_settings, missing_config_message, DiscoverError,
+    load_settings, missing_config_message, CommandEntry, DiscoverError,
 };
 use db::{shell_db_execute, shell_db_query};
 use http::{header::CONTENT_TYPE, Response, StatusCode};
 use keyring::{shell_secret_delete, shell_secret_get, shell_secret_set, KeychainState};
 use paths::resolve_paths;
+use process::{
+    shell_list_commands, shell_process_close_stdin, shell_process_exit, shell_process_kill,
+    shell_process_set_timeout, shell_process_write, shell_run, shell_spawn, ProcessState,
+};
 use server::{
     shell_http_respond, shell_http_start, shell_http_stop, shell_ws_close, shell_ws_send,
     shell_ws_start, shell_ws_stop, HttpServerState, WsServerState,
@@ -145,6 +150,8 @@ struct StartupPlan {
     show_dev_menu: bool,
     keychain_prefix: String,
     settings: HashMap<String, String>,
+    allowed_commands: Vec<CommandEntry>,
+    config_dir: PathBuf,
 }
 
 fn fallback_data_root(app: &tauri::App) -> Result<PathBuf, String> {
@@ -173,6 +180,8 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
                 show_dev_menu: default_show_dev_menu(),
                 keychain_prefix: "app-ly".into(),
                 settings: HashMap::new(),
+                allowed_commands: Vec::new(),
+                config_dir: PathBuf::from("."),
             });
         }
         Err(DiscoverError::Failed(message)) => {
@@ -187,6 +196,8 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
                 show_dev_menu: default_show_dev_menu(),
                 keychain_prefix: "app-ly".into(),
                 settings: HashMap::new(),
+                allowed_commands: Vec::new(),
+                config_dir: PathBuf::from("."),
             });
         }
     };
@@ -207,6 +218,8 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
                 show_dev_menu,
                 keychain_prefix: "app-ly".into(),
                 settings: HashMap::new(),
+                allowed_commands: Vec::new(),
+                config_dir: PathBuf::from("."),
             });
         }
     };
@@ -233,6 +246,8 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
         show_dev_menu,
         keychain_prefix,
         settings,
+        allowed_commands: discovery.config.allowed_commands,
+        config_dir: discovery.config_dir,
     })
 }
 
@@ -274,6 +289,10 @@ pub fn run() {
             app.manage(auth::AuthState::new());
             app.manage(HttpServerState::default());
             app.manage(WsServerState::default());
+            app.manage(ProcessState::new(
+                plan.allowed_commands.clone(),
+                plan.config_dir.clone(),
+            ));
             app.manage(ProtocolState {
                 contents_dir: plan.contents_dir.clone(),
                 fallback_html: plan.fallback_html.clone(),
@@ -339,6 +358,14 @@ pub fn run() {
             shell_ws_send,
             shell_ws_close,
             shell_ws_stop,
+            shell_run,
+            shell_spawn,
+            shell_process_write,
+            shell_process_close_stdin,
+            shell_process_kill,
+            shell_process_exit,
+            shell_process_set_timeout,
+            shell_list_commands,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

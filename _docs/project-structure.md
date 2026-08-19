@@ -44,6 +44,9 @@ app-ly/
 │   │   ├── auth.rs            # Shared-listener authViaBrowser with concurrent flow support
 │   │   ├── keyring.rs         # OS keychain secure store (secretSet/Get/Delete)
 │   │   ├── server.rs          # Embedded HTTP server + WebSocket server
+│   │   ├── process.rs         # Allowlisted subprocess execution (shell.run/spawn), argument
+│   │   │                        # matching against the [[allowedCommands]] regex allowlist, and
+│   │   │                        # live process control (stdin, exit/kill, re-armable timeout)
 │   │   └── menu.rs            # Native app menu (Reload, Open DevTools)
 │   └── gen/schemas/               # Tauri-generated ACL schemas, not hand-edited
 ├── _docs/                    # this documentation set
@@ -67,14 +70,14 @@ untracked.
    resolved `contents_dir`, path-traversal-checked against that root.
 4. Contents HTML calls `window.shell.*`, which is `window.__TAURI__.core.invoke("shell_*", ...)`
    under the hood (`shell-api.js`) — routed by the ACL in `permissions/shell.toml` and
-   `capabilities/default.json` to the matching handler in `commands.rs` (or `db.rs`).
+   `capabilities/default.json` to the matching handler in `commands.rs` (or `db.rs`, `process.rs`, …).
 
 ## Adding a new `window.shell` method
 
 Touch all four of these, in order, or the method will compile but silently fail (or not appear)
 at runtime:
 
-1. `src-tauri/src/commands.rs` (or `db.rs`, `auth.rs`, `keyring.rs`, `server.rs`) — add the `#[tauri::command]` handler.
+1. `src-tauri/src/commands.rs` (or `db.rs`, `auth.rs`, `keyring.rs`, `server.rs`, `process.rs`) — add the `#[tauri::command]` handler.
 2. `src-tauri/src/lib.rs` — import it and add it to the `tauri::generate_handler![...]` list.
 3. `src-tauri/permissions/shell.toml` — add the command name to `commands.allow`.
 4. `src-tauri/scripts/shell-api.js` — expose it on `window.shell`.

@@ -28,6 +28,19 @@ dataPath = "data"
 
 All paths are relative to the directory containing `app.toml`.
 
+Optional `[[allowedCommands]]` entries declare which local programs the contents HTML may start
+via `shell.run` / `shell.spawn` — nothing runs unless it is listed there, and `program`, `cwd`,
+and `env` come from this file only. See [`js-api.md`](js-api.md) for the full schema and
+argument-matching rules. `timeoutMs` here is a default — a spawned process's deadline can be changed at runtime with `proc.setTimeout(ms)`.
+
+```toml
+[[allowedCommands]]
+name = "git"
+program = "git"
+args = ["^(status|log|diff)$"]
+timeoutMs = 30000
+```
+
 ### Dev vs release
 
 | Setting | Dev (`tauri dev`) | Release (`tauri build`) |
