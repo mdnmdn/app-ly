@@ -850,7 +850,7 @@ temperature = 0.7                                   # optional. Default sampling
 maxTokens = 512                                     # optional. Default response length cap
 toolTimeoutMs = 30000                               # optional, default 30000. How long the shell waits
                                                     # for a JS tool handler before answering the model
-                                                    # with an error. Config-only, no per-request override.
+                                                    # with an error.
 ```
 
 Per-request `options` override these field by field.
@@ -891,6 +891,7 @@ Accepted by `generate`, `generateObject`, and `stream` alike. All optional; each
 | `instructions` | `string` | System prompt for this request |
 | `temperature` | `number` | Sampling temperature |
 | `maxTokens` | `number` | Response length cap |
+| `toolTimeoutMs` | `number` | How long to wait for a JS tool handler, in milliseconds |
 | `tools` | `array` | `{ name, description, parameters, handler }` entries — see [`shell.ai.generate`](#shellaigenerateprompt-options) |
 
 ## `shell.ai.info()`
@@ -1081,6 +1082,23 @@ const write = await shell.dbExecute("app.db", "UPDATE notes SET title = ? WHERE 
 console.log(write.changes, write.lastInsertRowid);
 ```
 
+Connections stay open after a query so the next call on the same `dbName` can reuse them. Call `dbClose` when you need the file released (copy, delete, rename, or hand it to another process). Idle connections are closed automatically after 30 seconds without a query or execute.
+
+## `shell.dbClose(dbName?)`
+
+Closes a cached SQLite connection and releases the database file (including WAL sidecar files).
+
+- `dbName` — optional. Simple database filename to close. Omit (or pass `null`/`undefined`) to close every open database.
+- Returns: `Promise<void>`
+- Closing a name that is not currently open is a no-op.
+
+```javascript
+await shell.dbClose("app.db");
+await shell.deleteFile("app.db");
+
+await shell.dbClose(); // close every open database
+```
+
 ## Errors
 
 All methods return promises that reject with a string error message on failure.
@@ -1091,7 +1109,7 @@ Common cases:
 - Missing file on `readFile`, `deleteFile`, `renameFile`, `openFile`, `openFileLocation`
 - Unsupported URL scheme in `fetch` or `openWindow` (only `http`/`https` allowed)
 - Network failure in `fetch`
-- Invalid database name or SQL error in `dbQuery` / `dbExecute`
+- Invalid database name or SQL error in `dbQuery` / `dbExecute` / `dbClose`
 - Window not available yet when calling window APIs during very early page load
 - Unknown window `id`, or `id: "main"`, passed to `closeWindow`
 - The platform opener binary is missing (e.g. `xdg-open` not installed) in `openFile`/`openFileLocation` or `authViaBrowser`
@@ -1133,6 +1151,7 @@ Common cases:
 ## Limitations (v1)
 
 - File and database APIs accept simple filenames only, not nested paths
+- SQLite connections stay cached until `dbClose` or 30 seconds of idle time
 - `fetch` returns text bodies only (no streaming or binary)
 - SQLite parameter values support `null`, boolean, number, and string only
 - SQLite blob columns are returned as `null` in `dbQuery`
@@ -1159,4 +1178,4 @@ Common cases:
 - `generateObject` supports a subset of JSON Schema with no `$ref`, and treats an absent `required` as "every property is required"
 - `generateObject` does not stream, and `stream` takes no schema — structured output and streaming are mutually exclusive
 - Cancelling a stream stops delivery but not the inference itself, and `cancel()` exists on the stream handle only — `generate`/`generateObject` cannot be cancelled
-- `toolTimeoutMs` is set in `app.toml` only; there is no per-request or per-tool override, and no overall deadline on a generation
+- `toolTimeoutMs` is per tool call (from `[ai]` or per-request `options.toolTimeoutMs`); there is no per-tool override, and no overall deadline on a generation

@@ -1,6 +1,6 @@
 icon = "example/icon.png"
 name = "Shell Example"
-contents = "example/contents/index.html"
+contents = "example/contents"
 dataPath = "example/data"
 keychainPrefix = "app-ly-dev"
 

@@ -81,8 +81,7 @@ pub fn shell_http_start(
     }
 
     let addr = format!("127.0.0.1:{}", port.unwrap_or(0));
-    let server =
-        tiny_http::Server::http(&addr).map_err(|e| format!("start HTTP server: {e}"))?;
+    let server = tiny_http::Server::http(&addr).map_err(|e| format!("start HTTP server: {e}"))?;
     let addr_str = format!("{}", server.server_addr());
     let actual_port = addr_str
         .rsplit(':')
@@ -95,53 +94,51 @@ pub fn shell_http_start(
 
     let pending = state.pending.clone();
 
-    thread::spawn(move || {
-        loop {
-            if shutdown_rx.try_recv().is_ok() {
-                break;
-            }
+    thread::spawn(move || loop {
+        if shutdown_rx.try_recv().is_ok() {
+            break;
+        }
 
-            match server.try_recv() {
-                Ok(Some(mut request)) => {
-                    let id = next_id("http-req");
-                    let method = request.method().to_string();
-                    let url = request.url().to_string();
-                    let headers: HashMap<String, String> = request
-                        .headers()
-                        .iter()
-                        .map(|h| (h.field.to_string(), h.value.to_string()))
-                        .collect();
-                    let mut body_buf = String::new();
-                    request.as_reader().read_to_string(&mut body_buf).ok();
+        match server.try_recv() {
+            Ok(Some(mut request)) => {
+                let id = next_id("http-req");
+                let method = request.method().to_string();
+                let url = request.url().to_string();
+                let headers: HashMap<String, String> = request
+                    .headers()
+                    .iter()
+                    .map(|h| (h.field.to_string(), h.value.to_string()))
+                    .collect();
+                let mut body_buf = String::new();
+                request.as_reader().read_to_string(&mut body_buf).ok();
 
-                    {
-                        let mut p = pending.lock().unwrap();
-                        p.insert(
-                            id.clone(),
-                            PendingHttpRequest {
-                                request: Some(request),
-                            },
-                        );
-                    }
-
-                    let _ = app.emit_to(
-                        "main",
-                        "shell://http-request",
-                        serde_json::json!({
-                            "id": id,
-                            "method": method,
-                            "url": url,
-                            "headers": headers,
-                            "body": body_buf,
-                        }),
+                {
+                    let mut p = pending.lock().unwrap();
+                    p.insert(
+                        id.clone(),
+                        PendingHttpRequest {
+                            request: Some(request),
+                        },
                     );
                 }
-                Ok(None) => {
-                    thread::sleep(Duration::from_millis(50));
-                }
-                Err(e) => {
-                    eprintln!("HTTP server recv error: {e}");
-                }
+
+                let _ = app.emit_to(
+                    "main",
+                    "shell://http-request",
+                    serde_json::json!({
+                        "id": id,
+                        "method": method,
+                        "url": url,
+                        "headers": headers,
+                        "body": body_buf,
+                    }),
+                );
+            }
+            Ok(None) => {
+                thread::sleep(Duration::from_millis(50));
+            }
+            Err(e) => {
+                eprintln!("HTTP server recv error: {e}");
             }
         }
     });
@@ -166,14 +163,12 @@ pub fn shell_http_respond(
         .request
         .ok_or_else(|| String::from("request already consumed"))?;
 
-    let mut response = tiny_http::Response::from_string(body.unwrap_or_default())
-        .with_status_code(status);
+    let mut response =
+        tiny_http::Response::from_string(body.unwrap_or_default()).with_status_code(status);
 
     if let Some(hdrs) = headers {
         for (key, value) in hdrs {
-            if let Ok(header) =
-                tiny_http::Header::from_bytes(key.as_bytes(), value.as_bytes())
-            {
+            if let Ok(header) = tiny_http::Header::from_bytes(key.as_bytes(), value.as_bytes()) {
                 response = response.with_header(header);
             }
         }
@@ -207,8 +202,7 @@ pub fn shell_ws_start(
     }
 
     let addr = format!("127.0.0.1:{}", port.unwrap_or(0));
-    let listener =
-        TcpListener::bind(&addr).map_err(|e| format!("start WS server: {e}"))?;
+    let listener = TcpListener::bind(&addr).map_err(|e| format!("start WS server: {e}"))?;
     let actual_port = listener
         .local_addr()
         .map_err(|e| format!("get WS addr: {e}"))?
@@ -328,9 +322,7 @@ fn handle_ws_connection(
             Ok(tungstenite::Message::Pong(_)) => {}
             Ok(tungstenite::Message::Binary(_)) => {}
             Ok(_) => {}
-            Err(tungstenite::Error::Io(ref e))
-                if e.kind() == std::io::ErrorKind::WouldBlock =>
-            {
+            Err(tungstenite::Error::Io(ref e)) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(50));
             }
             Err(_) => {
@@ -368,10 +360,7 @@ pub fn shell_ws_send(
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn shell_ws_close(
-    state: State<'_, WsServerState>,
-    id: String,
-) -> Result<(), String> {
+pub fn shell_ws_close(state: State<'_, WsServerState>, id: String) -> Result<(), String> {
     let connections = state.connections.lock().unwrap();
     let handle = connections
         .get(&id)

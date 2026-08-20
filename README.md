@@ -29,7 +29,7 @@ myapp/
 # myapp/app.toml
 icon = "icon.png"
 name = "My App"
-contents = "contents/index.html"
+contents = "contents"
 dataPath = "data"
 ```
 

@@ -26,7 +26,7 @@ use config::{
     config_fallback_html, default_show_dev_menu, discover_config, effective_show_dev_menu,
     load_settings, missing_config_message, AiConfig, CommandEntry, DiscoverError,
 };
-use db::{shell_db_execute, shell_db_query};
+use db::{shell_db_close, shell_db_execute, shell_db_query, DbState};
 use http::{header::CONTENT_TYPE, Response, StatusCode};
 use keyring::{shell_secret_delete, shell_secret_get, shell_secret_set, KeychainState};
 use paths::resolve_paths;
@@ -292,6 +292,7 @@ pub fn run() {
             app.manage(ShellState {
                 data_root: plan.data_root.clone(),
             });
+            app.manage(DbState::new());
             app.manage(EvalState::default());
             app.manage(KeychainState {
                 prefix: plan.keychain_prefix.clone(),
@@ -352,6 +353,7 @@ pub fn run() {
             shell_get_screen_at,
             shell_db_query,
             shell_db_execute,
+            shell_db_close,
             shell_toggle_devtools,
             shell_open_window,
             shell_close_window,

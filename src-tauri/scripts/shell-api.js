@@ -437,6 +437,7 @@
       instructions: options.instructions ?? null,
       temperature: options.temperature ?? null,
       maxTokens: options.maxTokens ?? null,
+      toolTimeoutMs: options.toolTimeoutMs ?? null,
       tools: shellAi.specs(options.tools),
     }),
 
@@ -498,6 +499,8 @@
       window.__TAURI__.core.invoke("shell_db_query", { dbName, query, params }),
     dbExecute: (dbName, query, params = []) =>
       window.__TAURI__.core.invoke("shell_db_execute", { dbName, query, params }),
+    dbClose: (dbName) =>
+      window.__TAURI__.core.invoke("shell_db_close", { dbName: dbName ?? null }),
     getWindowPosition: () =>
       window.__TAURI__.core.invoke("shell_get_window_position"),
     setWindowPosition: (x, y) =>

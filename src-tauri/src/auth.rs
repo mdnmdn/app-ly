@@ -260,13 +260,12 @@ pub async fn shell_auth_via_browser(
                 .remove(&url_clone);
         }
 
-        channel_result
-            .map_err(|e| match e {
-                RecvTimeoutError::Timeout => {
-                    "authentication timed out waiting for browser callback".to_string()
-                }
-                RecvTimeoutError::Disconnected => "auth flow cancelled".to_string(),
-            })?
+        channel_result.map_err(|e| match e {
+            RecvTimeoutError::Timeout => {
+                "authentication timed out waiting for browser callback".to_string()
+            }
+            RecvTimeoutError::Disconnected => "auth flow cancelled".to_string(),
+        })?
     })
     .await
     .map_err(|e| format!("auth task: {e}"))?

@@ -6,11 +6,11 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
+use tauri::webview::PageLoadEvent;
 use tauri::{
     AppHandle, Emitter, Manager, Monitor, PhysicalPosition, PhysicalSize, State, Url, WebviewUrl,
     WebviewWindowBuilder, WindowEvent,
 };
-use tauri::webview::PageLoadEvent;
 
 #[derive(Clone)]
 pub struct ShellState {
@@ -720,5 +720,3 @@ pub async fn shell_eval_window(
     let window = find_window(&app, &id)?;
     eval_in_window(&state, &window, &code).await
 }
-
-

@@ -167,7 +167,7 @@ toolTimeoutMs = 30000                            # optional; default 30000. How 
 | `instructions` | string | none | System prompt applied to every request that does not set its own |
 | `temperature` | float | model default | Passed through to the model's sampling options |
 | `maxTokens` | integer | model default | Upper bound on response length |
-| `toolTimeoutMs` | integer | `30000` | Per tool call, not per request. **Config-only** — there is no per-request override |
+| `toolTimeoutMs` | integer | `30000` | Per tool call. Overridden by per-request `options.toolTimeoutMs` |
 
 Unknown keys are ignored, so an `app.toml` written for a newer shell still loads on an older one.
 Per-request `options` always win over these defaults, field by field: setting `temperature` on one
@@ -263,6 +263,7 @@ Every field is optional, and every one overrides the matching `[ai]` config defa
 | `instructions` | `string` | System prompt for this request only |
 | `temperature` | `number` | Sampling temperature |
 | `maxTokens` | `number` | Response length cap |
+| `toolTimeoutMs` | `number` | How long to wait for a JS tool handler, in milliseconds |
 | `tools` | `array` | Tool declarations plus their JS handlers — see [Tool calling](#tool-calling) |
 
 All three generating calls accept the same options, tools included.
@@ -402,7 +403,7 @@ keeps going, which is almost always what you want:
    `{ "error": "<message>" }` as the tool's output. It does **not** wait for the timeout.
 2. **An unknown tool name** — the model asks for a tool this request did not register — is answered
    with `unknown tool "x"` in the same way. Generation continues.
-3. **A handler that never returns** hits `toolTimeoutMs` (default `30000`, set in `[ai]`). The call
+3. **A handler that never returns** hits `toolTimeoutMs` (default `30000`, from `[ai]` or this request's `options.toolTimeoutMs`). The call
    is recorded as `tool "x" did not answer within 30000ms` and the model is handed that as the
    tool's output. A hung handler can never hang the app; if it eventually resolves, its late answer
    is discarded silently.
@@ -591,7 +592,7 @@ conversation state being carried between them.
   every schema is inline. And an absent `required` means "all required", the opposite of standard
   JSON Schema.
 - `enum` supports string values only; `const` applies to strings only.
-- `toolTimeoutMs` is configured in `app.toml` and cannot be set per request or per tool.
+- `toolTimeoutMs` is per tool call, not an overall deadline on a generation. There is no per-tool override.
 - Tool handlers are keyed by name per request; duplicate names within one request collapse to the
   last handler registered.
 - Tool results are handed to the model as JSON text, so they must be JSON-serialisable —

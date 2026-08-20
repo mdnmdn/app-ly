@@ -40,7 +40,7 @@ app-ly/
 │   │   ├── paths.rs           # Resolve icon, contents, data paths relative to config directory
 │   │   ├── commands.rs        # #[tauri::command] handlers backing window.shell (files,
 │   │   │                        # notifications, fetch, window/screen control, child windows)
-│   │   ├── db.rs              # SQLite dbQuery/dbExecute handlers
+│   │   ├── db.rs              # SQLite dbQuery/dbExecute/dbClose handlers; idle-timeout cache
 │   │   ├── auth.rs            # Shared-listener authViaBrowser with concurrent flow support
 │   │   ├── keyring.rs         # OS keychain secure store (secretSet/Get/Delete)
 │   │   ├── server.rs          # Embedded HTTP server + WebSocket server
@@ -89,6 +89,6 @@ at runtime:
 4. `src-tauri/scripts/shell-api.js` — expose it on `window.shell`.
 
 Then document it in [`js-api.md`](js-api.md) (full reference) and
-[`app-agent-guide.md`](app-agent-guide.md) (summary table + narrative section) for anyone
+[`app-agent-guide.md`](app-agent-guide.md) (short example next to each API) for anyone
 building an app against the shell. The on-device AI surface has its own deep reference in
 [`ai.md`](ai.md).

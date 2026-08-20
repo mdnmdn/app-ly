@@ -22,11 +22,11 @@ Create an `app.toml`:
 ```toml
 icon = "icon.png"
 name = "My App"
-contents = "contents/index.html"
+contents = "contents"
 dataPath = "data"
 ```
 
-All paths are relative to the directory containing `app.toml`.
+All paths are relative to the directory containing `app.toml`. `contents` (UI) and `dataPath` (writable data) are independent of each other.
 
 Optional `[[allowedCommands]]` entries declare which local programs the contents HTML may start
 via `shell.run` / `shell.spawn` — nothing runs unless it is listed there, and `program`, `cwd`,

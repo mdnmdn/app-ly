@@ -7,8 +7,8 @@
 //! as the neutral `"default"` id defined in `ai.rs`.
 
 use super::{
-    reason_for, translate_schema, AiFeatures, Backend, GenerateRequest, OsUnavailable, ToolDispatch,
-    ToolSpec, Unavailable,
+    reason_for, translate_schema, AiFeatures, Backend, GenerateRequest, OsUnavailable,
+    ToolDispatch, ToolSpec, Unavailable,
 };
 use foundation_models::{
     Availability, GeneratedContent, GenerationOptions, GenerationSchema, LanguageModelSession,
@@ -185,8 +185,10 @@ impl Backend for AppleBackend {
         // reach `sink` from inside it — so by the time it returns, everything
         // this request will ever emit has already been emitted.
         session
-            .stream_with(&request.prompt, options_for(&request), move |event| {
-                match event {
+            .stream_with(
+                &request.prompt,
+                options_for(&request),
+                move |event| match event {
                     StreamEvent::Chunk(delta) => {
                         collected.lock().unwrap().push_str(delta);
                         sink(delta);
@@ -195,8 +197,8 @@ impl Backend for AppleBackend {
                         *failed.lock().unwrap() = Some(error.message().to_string());
                     }
                     _ => {}
-                }
-            })
+                },
+            )
             .map_err(|e| format!("ai stream: {}", e.message()))?;
 
         if let Some(error) = failure.lock().unwrap().take() {

@@ -21,7 +21,10 @@ pub fn shell_secret_set(
     password: String,
 ) -> Result<(), String> {
     let prefixed = prefixed_service(&state.prefix, &service);
-    println!("shell_secret_set: prefix={}, service={}, full={prefixed}", state.prefix, service);
+    println!(
+        "shell_secret_set: prefix={}, service={}, full={prefixed}",
+        state.prefix, service
+    );
     let entry =
         keyring::Entry::new(&prefixed, &account).map_err(|e| format!("keyring entry: {e}"))?;
     entry
@@ -36,12 +39,13 @@ pub fn shell_secret_get(
     account: String,
 ) -> Result<String, String> {
     let prefixed = prefixed_service(&state.prefix, &service);
-    println!("shell_secret_get: prefix={}, service={}, full={prefixed}", state.prefix, service);
+    println!(
+        "shell_secret_get: prefix={}, service={}, full={prefixed}",
+        state.prefix, service
+    );
     let entry =
         keyring::Entry::new(&prefixed, &account).map_err(|e| format!("keyring entry: {e}"))?;
-    entry
-        .get_password()
-        .map_err(|e| format!("get secret: {e}"))
+    entry.get_password().map_err(|e| format!("get secret: {e}"))
 }
 
 #[tauri::command]
@@ -51,7 +55,10 @@ pub fn shell_secret_delete(
     account: String,
 ) -> Result<(), String> {
     let prefixed = prefixed_service(&state.prefix, &service);
-    println!("shell_secret_delete: prefix={}, service={}, full={prefixed}", state.prefix, service);
+    println!(
+        "shell_secret_delete: prefix={}, service={}, full={prefixed}",
+        state.prefix, service
+    );
     let entry =
         keyring::Entry::new(&prefixed, &account).map_err(|e| format!("keyring entry: {e}"))?;
     entry

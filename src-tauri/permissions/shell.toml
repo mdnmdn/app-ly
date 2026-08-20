@@ -20,6 +20,7 @@ commands.allow = [
   "shell_get_screen_at",
   "shell_db_query",
   "shell_db_execute",
+  "shell_db_close",
   "shell_toggle_devtools",
   "shell_open_window",
   "shell_close_window",

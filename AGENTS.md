@@ -19,8 +19,8 @@ TOML schema:
 ```toml
 icon = "icon.png"
 name = "My App"
-contents = "contents/index.html"
-dataPath = "data"
+contents = "contents"   # UI directory (or an HTML file); relative to this app.toml
+dataPath = "data"       # writable data dir; relative to this app.toml, independent of contents
 showDevMenu = true      # optional; default true in debug, false in release
 keychainPrefix = "app"  # optional; prefix for OS keychain keys, default "app-ly"
 
@@ -50,10 +50,11 @@ Discovery order at startup:
 2. `--config <path>` CLI flag
 3. `./app.toml` at project root (dev fallback)
 
-Path resolution:
+Path resolution — all relative to the directory containing the loaded `app.toml`:
 
-- `icon` and `contents` are relative to the directory containing the loaded `app.toml`
-- `dataPath`: always relative to the directory containing `app.toml` (both dev and release)
+- `icon` — icon file
+- `contents` — UI directory, or an HTML entry file (if a file, its parent is the UI root; default entry is `index.html`)
+- `dataPath` — writable data directory, independent of `contents` (dev and release)
 
 Files:
 
@@ -68,7 +69,7 @@ Files:
 | [`src-tauri/src/config.rs`](src-tauri/src/config.rs) | Load and parse `app.toml` |
 | [`src-tauri/src/paths.rs`](src-tauri/src/paths.rs) | Resolve icon, contents, data paths |
 | [`src-tauri/src/commands.rs`](src-tauri/src/commands.rs) | Invoke handlers for JS API (files, fetch, windows, screens) |
-| [`src-tauri/src/db.rs`](src-tauri/src/db.rs) | SQLite query and execute handlers |
+| [`src-tauri/src/db.rs`](src-tauri/src/db.rs) | SQLite query, execute, and close handlers; connection cache with idle timeout |
 | [`src-tauri/src/auth.rs`](src-tauri/src/auth.rs) | Shared-listener authViaBrowser with concurrent flow dispatch |
 | [`src-tauri/src/keyring.rs`](src-tauri/src/keyring.rs) | OS keychain secret set/get/delete |
 | [`src-tauri/src/server.rs`](src-tauri/src/server.rs) | Embedded HTTP server and WebSocket server |
@@ -94,6 +95,7 @@ Injected as `window.shell` before page scripts run. Keyboard shortcuts are injec
 - `getScreens()`, `getScreenAt(x, y)` — display sizes and multi-monitor info
 - `dbQuery(dbName, query, params?)` — tabular SELECT results
 - `dbExecute(dbName, query, params?)` — DML / scalar writes, returns changes + row id
+- `dbClose(dbName?)` — close a cached SQLite connection and release the file (all open dbs if omitted); idle connections also close after 30s
 - `secretSet(service, account, password)` — OS keychain store
 - `secretGet(service, account)` — OS keychain retrieve
 - `secretDelete(service, account)` — OS keychain delete

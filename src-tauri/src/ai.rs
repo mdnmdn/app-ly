@@ -147,6 +147,7 @@ pub struct AiOptions {
     pub instructions: Option<String>,
     pub temperature: Option<f64>,
     pub max_tokens: Option<u32>,
+    pub tool_timeout_ms: Option<u64>,
     pub tools: Vec<ToolSpec>,
 }
 
@@ -475,9 +476,7 @@ pub(crate) fn translate_schema(schema: &Value, name: &str) -> Result<Value, Stri
         primitive @ ("string" | "integer" | "number" | "boolean" | "null") => {
             translate_primitive(object, primitive)
         }
-        other => Err(format!(
-            "unsupported schema type \"{other}\" at \"{name}\""
-        )),
+        other => Err(format!("unsupported schema type \"{other}\" at \"{name}\"")),
     }
 }
 
@@ -570,7 +569,10 @@ fn translate_object(object: &Map<String, Value>, name: &str) -> Result<Value, St
     let mut translated = Map::new();
     for (key, value) in properties {
         let mut child = translate_schema(value, key)?;
-        let explicit = value.get("optional").and_then(Value::as_bool).unwrap_or(false);
+        let explicit = value
+            .get("optional")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
         let optional = explicit || !is_required(key);
         if let Some(child) = child.as_object_mut() {
             child.insert("optional".into(), json!(optional));
@@ -586,7 +588,10 @@ fn translate_object(object: &Map<String, Value>, name: &str) -> Result<Value, St
 }
 
 fn translate_array(object: &Map<String, Value>, name: &str) -> Result<Value, String> {
-    let items = object.get("items").cloned().unwrap_or(json!({"type": "string"}));
+    let items = object
+        .get("items")
+        .cloned()
+        .unwrap_or(json!({"type": "string"}));
     let item = translate_schema(&items, &format!("{name}Item"))?;
 
     let mut node = Map::new();
@@ -668,6 +673,13 @@ fn resolve_model(requested: Option<&str>) -> Result<String, String> {
     }
 }
 
+fn resolve_tool_timeout(settings: &AiSettings, options: &AiOptions) -> Duration {
+    options
+        .tool_timeout_ms
+        .map(Duration::from_millis)
+        .unwrap_or(settings.tool_timeout)
+}
+
 fn build_request(
     settings: &AiSettings,
     prompt: String,
@@ -677,7 +689,9 @@ fn build_request(
 ) -> GenerateRequest {
     GenerateRequest {
         prompt,
-        instructions: options.instructions.or_else(|| settings.instructions.clone()),
+        instructions: options
+            .instructions
+            .or_else(|| settings.instructions.clone()),
         temperature: options.temperature.or(settings.temperature),
         max_tokens: options.max_tokens.or(settings.max_tokens),
         tools: options.tools,
@@ -733,6 +747,7 @@ pub async fn shell_ai_generate(
     let options = options.unwrap_or_default();
     let model = resolve_model(options.model.as_deref())?;
 
+    let tool_timeout = resolve_tool_timeout(&state.settings, &options);
     let cancelled = register_request(&state.requests, &request_id)?;
     let _guard = RequestGuard {
         requests: state.requests.clone(),
@@ -745,7 +760,7 @@ pub async fn shell_ai_generate(
         app,
         request_id,
         state.pending_tools.clone(),
-        state.settings.tool_timeout,
+        tool_timeout,
         records.clone(),
     );
     let request = build_request(&state.settings, prompt, options, None, dispatch);
@@ -785,6 +800,7 @@ pub async fn shell_ai_generate_object(
     }))
     .map_err(|e| format!("encode schema: {e}"))?;
 
+    let tool_timeout = resolve_tool_timeout(&state.settings, &options);
     let cancelled = register_request(&state.requests, &request_id)?;
     let _guard = RequestGuard {
         requests: state.requests.clone(),
@@ -797,7 +813,7 @@ pub async fn shell_ai_generate_object(
         app,
         request_id,
         state.pending_tools.clone(),
-        state.settings.tool_timeout,
+        tool_timeout,
         records.clone(),
     );
     let request = build_request(
@@ -839,6 +855,7 @@ pub fn shell_ai_stream(
     let model = resolve_model(options.model.as_deref())?;
 
     let id = request_id;
+    let tool_timeout = resolve_tool_timeout(&state.settings, &options);
     let cancelled = register_request(&state.requests, &id)?;
 
     let backend = state.backend.clone();
@@ -847,7 +864,7 @@ pub fn shell_ai_stream(
         app.clone(),
         id.clone(),
         state.pending_tools.clone(),
-        state.settings.tool_timeout,
+        tool_timeout,
         records.clone(),
     );
     let request = build_request(&state.settings, prompt, options, None, dispatch);
@@ -1049,6 +1066,28 @@ mod tests {
         assert_eq!(request.instructions.as_deref(), Some("from request"));
         assert_eq!(request.temperature, Some(0.9));
         assert_eq!(request.max_tokens, Some(256));
+    }
+
+    #[test]
+    fn per_request_tool_timeout_wins_over_config() {
+        let settings = AiSettings::from_config(Some(&config("toolTimeoutMs = 1500\n")));
+        let options = AiOptions {
+            tool_timeout_ms: Some(500),
+            ..AiOptions::default()
+        };
+        assert_eq!(
+            resolve_tool_timeout(&settings, &options),
+            Duration::from_millis(500)
+        );
+    }
+
+    #[test]
+    fn absent_request_tool_timeout_uses_config() {
+        let settings = AiSettings::from_config(Some(&config("toolTimeoutMs = 1500\n")));
+        assert_eq!(
+            resolve_tool_timeout(&settings, &AiOptions::default()),
+            Duration::from_millis(1500)
+        );
     }
 
     #[test]
@@ -1271,9 +1310,8 @@ mod tests {
 
     #[test]
     fn string_enums_become_any_of_choices() {
-        let translated =
-            translate_schema(&json!({ "type": "string", "enum": ["a", "b"] }), "Mood")
-                .expect("translate");
+        let translated = translate_schema(&json!({ "type": "string", "enum": ["a", "b"] }), "Mood")
+            .expect("translate");
         assert_eq!(translated["type"], json!("any_of"));
         assert_eq!(translated["name"], json!("Mood"));
         assert_eq!(translated["choices"], json!(["a", "b"]));
@@ -1331,9 +1369,11 @@ mod tests {
 
     #[test]
     fn a_missing_type_is_treated_as_an_object() {
-        let translated =
-            translate_schema(&json!({ "properties": { "a": { "type": "string" } } }), "Root")
-                .expect("translate");
+        let translated = translate_schema(
+            &json!({ "properties": { "a": { "type": "string" } } }),
+            "Root",
+        )
+        .expect("translate");
         assert_eq!(translated["type"], json!("object"));
     }
 
@@ -1368,7 +1408,10 @@ mod tests {
         assert_eq!(error, "schema at \"Root\" must be a JSON object");
 
         let error = translate_schema(&json!({ "type": "widget" }), "Root").unwrap_err();
-        assert!(error.contains("unsupported schema type \"widget\""), "{error}");
+        assert!(
+            error.contains("unsupported schema type \"widget\""),
+            "{error}"
+        );
 
         let error =
             translate_schema(&json!({ "type": "string", "enum": [1, 2] }), "Root").unwrap_err();
