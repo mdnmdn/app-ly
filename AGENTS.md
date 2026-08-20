@@ -10,7 +10,7 @@ Generic Tauri desktop shell that loads app identity and UI from `app.toml`.
 - `contents/` — static HTML/JS/CSS loaded into the window
 - optional icon asset
 
-The shell exposes `window.shell` to contents HTML for persistence, logging, notifications, CORS-free HTTP, and SQLite databases stored in `dataPath`, OS keychain secrets, HTTP/WebSocket servers, and allowlisted subprocess execution.
+The shell exposes `window.shell` to contents HTML for persistence, logging, notifications, CORS-free HTTP, and SQLite databases stored in `dataPath`, OS keychain secrets, HTTP/WebSocket servers, allowlisted subprocess execution, and an on-device LLM.
 
 ## Config
 
@@ -33,6 +33,13 @@ maxArgs = 8                                    # optional; hard cap on argument 
 cwd = "repo"                                   # optional; relative to the app.toml directory
 timeoutMs = 30000                              # optional; default timeout, absent = no timeout
 env = { GIT_PAGER = "cat" }                    # optional; merged over the inherited environment
+
+[ai]                                           # optional; absent = all defaults, feature on
+enabled = true                                 # optional; default true. false => reason "disabled-by-config"
+instructions = "Answer briefly."               # optional; default system prompt for every request
+temperature = 0.7                              # optional; default sampling temperature
+maxTokens = 512                                # optional; default cap on response length
+toolTimeoutMs = 30000                          # optional; default 30000. Wait for a JS tool handler
 ```
 
 Omitting both `args` and `extraArgs` leaves arguments unrestricted for that program. Commands never run through a shell, and `program`/`cwd`/`env` can only come from config, never from JS.
@@ -66,10 +73,13 @@ Files:
 | [`src-tauri/src/keyring.rs`](src-tauri/src/keyring.rs) | OS keychain secret set/get/delete |
 | [`src-tauri/src/server.rs`](src-tauri/src/server.rs) | Embedded HTTP server and WebSocket server |
 | [`src-tauri/src/process.rs`](src-tauri/src/process.rs) | Allowlisted subprocess execution (`shell_run`, `shell_spawn`, stdin, exit/kill, runtime timeout, allowlist introspection) |
+| [`src-tauri/src/ai.rs`](src-tauri/src/ai.rs) | On-device AI (`shell.ai`): commands, tool bridge, JSON Schema translation, backend selection; backends in [`src-tauri/src/ai/`](src-tauri/src/ai/) (`backend_apple.rs` for macOS + the `ai-apple` feature, `backend_stub.rs` everywhere else) |
 | [`src-tauri/src/menu.rs`](src-tauri/src/menu.rs) | Native app menu (Reload, Open DevTools) |
 | [`src-tauri/src/lib.rs`](src-tauri/src/lib.rs) | App setup, `shell://` protocol, window creation, init script, state managers |
 
-See [`_docs/project-structure.md`](_docs/project-structure.md) for the full repo layout.
+See [`_docs/project-structure.md`](_docs/project-structure.md) for the full repo layout, and
+[`_docs/ai.md`](_docs/ai.md) for the on-device AI reference (platform requirements, reason codes,
+supported JSON Schema subset, tool bridge).
 
 ## JS API
 
@@ -94,6 +104,10 @@ Injected as `window.shell` before page scripts run. Keyboard shortcuts are injec
 - `run(name, args?, options?)` — run an allowlisted program to completion, returns stdout/stderr/exit
 - `spawn(name, args?, options?)` — streaming child process (`onStdout`/`onStderr`/`onExit`, `write`, `exit`/`kill`, `setTimeout`, `exited`, async iteration)
 - `listCommands()` — the `[[allowedCommands]]` entries this app was configured with
+- `ai.info()`, `ai.available()`, `ai.models()` — on-device model availability (never reject)
+- `ai.generate(prompt, options?)` — one-shot text, returns `{ text, model, toolCalls }`
+- `ai.generateObject(prompt, schema, options?)` — schema-constrained structured output
+- `ai.stream(prompt, options?)` — streaming handle (`onText`, `completed`, `cancel`, async iteration)
 
 Dev shortcuts (when `showDevMenu` is enabled):
 

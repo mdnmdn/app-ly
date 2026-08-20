@@ -14,3 +14,12 @@ name = "ping"
 program = "ping"
 args = ["^-c$", "^[1-9]$", "^(127\\.0\\.0\\.1|localhost)$"]
 timeoutMs = 10000
+
+# On-device AI (`shell.ai`). Everything here is optional — uncomment to change
+# a default. See app.toml.example for what each key does.
+# [ai]
+# enabled = true
+# instructions = "Answer briefly and in plain text."
+# temperature = 0.7
+# maxTokens = 512
+# toolTimeoutMs = 30000

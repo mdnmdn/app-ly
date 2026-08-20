@@ -85,6 +85,15 @@
     </section>
 
     <section>
+      <h2>AI (on-device)</h2>
+      <p id="ai-status">Checking on-device AI…</p>
+      <button id="ai-generate">Generate text</button>
+      <button id="ai-object">Generate object</button>
+      <button id="ai-tool">Generate with a tool</button>
+      <button id="ai-stream">Stream text</button>
+    </section>
+
+    <section>
       <h2>Child Windows</h2>
       <button id="open-window">Open external window</button>
       <button id="close-window">Close external window</button>
@@ -277,6 +286,113 @@
           show(String(error));
         }
       });
+
+      // ── AI ───────────────────────────────────────────────────────────
+
+      const aiStatus = document.getElementById("ai-status");
+
+      function describeAi(info) {
+        if (info.available) {
+          const models = info.models.map((m) => m.id).join(", ") || "none";
+          return `On-device AI available — models: ${models}`;
+        }
+        return `On-device AI unavailable — ${info.reason}${
+          info.detail ? ` (${info.detail})` : ""
+        }`;
+      }
+
+      // shell.ai.info() never rejects, so this is safe to call on load.
+      shell.ai.info().then((info) => {
+        aiStatus.textContent = describeAi(info);
+      });
+
+      // Every AI button degrades to a visible message when the model is not
+      // available, instead of failing silently in the console.
+      async function withAi(run) {
+        const info = await shell.ai.info();
+        aiStatus.textContent = describeAi(info);
+        if (!info.available) {
+          show(describeAi(info));
+          return;
+        }
+        try {
+          await run();
+        } catch (error) {
+          show(String(error));
+        }
+      }
+
+      document.getElementById("ai-generate").addEventListener("click", () =>
+        withAi(async () => {
+          show("Generating…");
+          const result = await shell.ai.generate("Write a haiku about desktop apps.", {
+            instructions: "You are concise.",
+            maxTokens: 200,
+          });
+          show(`${result.text}\n\n-- model: ${result.model}`);
+        }),
+      );
+
+      document.getElementById("ai-object").addEventListener("click", () =>
+        withAi(async () => {
+          show("Generating…");
+          const schema = {
+            type: "object",
+            properties: {
+              title: { type: "string", description: "Short title" },
+              tags: { type: "array", items: { type: "string" } },
+              rating: { type: "integer" },
+            },
+            required: ["title", "tags", "rating"],
+          };
+          const result = await shell.ai.generateObject(
+            "Describe the app-ly desktop shell.",
+            schema,
+          );
+          show(result.object);
+        }),
+      );
+
+      document.getElementById("ai-tool").addEventListener("click", () =>
+        withAi(async () => {
+          show("Generating…");
+          const result = await shell.ai.generate(
+            "What time is it right now? Use the get_time tool.",
+            {
+              tools: [
+                {
+                  name: "get_time",
+                  description: "Returns the current local time as an ISO 8601 string.",
+                  parameters: { type: "object", properties: {} },
+                  handler: () => ({ time: new Date().toISOString() }),
+                },
+              ],
+            },
+          );
+          const ran = result.toolCalls
+            .map((call) =>
+              call.error
+                ? `${call.name} -> error: ${call.error}`
+                : `${call.name} -> ${JSON.stringify(call.result)}`,
+            )
+            .join("\n");
+          show(`${result.text}\n\n-- tools that ran --\n${ran || "(none)"}`);
+        }),
+      );
+
+      document.getElementById("ai-stream").addEventListener("click", () =>
+        withAi(async () => {
+          const stream = await shell.ai.stream("Count from one to ten in words.");
+          let text = "";
+          show("Streaming…");
+          for await (const delta of stream) {
+            text += delta;
+            show(text);
+          }
+          const result = await stream.completed;
+          show(`${result.text}\n\n-- model: ${result.model}`);
+        }),
+      );
 
       // ── Child Windows ────────────────────────────────────────────────
 

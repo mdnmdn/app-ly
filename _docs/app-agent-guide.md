@@ -157,8 +157,14 @@ Available immediately on `window` before your page scripts run. Every method ret
 | `run` | `(name, args?, options?) → { stdout, stderr, code, signal, timedOut }` | Run an allowlisted program to completion |
 | `spawn` | `(name, args?, options?) → ChildProcess` | Start an allowlisted program and stream its output |
 | `listCommands` | `() → [{ name, program, argsRestricted, timeoutMs }]` | List the `[[allowedCommands]]` entries this app was configured with |
+| `ai.info` | `() → { available, reason, detail, models, features }` | Whether the on-device model can be used right now (never rejects) |
+| `ai.available` | `() → boolean` | Shorthand for `ai.info().available` |
+| `ai.models` | `() → [{ id, name, default }]` | The models this shell exposes — one, or `[]` when unavailable |
+| `ai.generate` | `(prompt, options?) → { text, model, toolCalls }` | One-shot on-device text generation |
+| `ai.generateObject` | `(prompt, schema, options?) → { object, model, toolCalls }` | Schema-constrained structured output |
+| `ai.stream` | `(prompt, options?) → AiStream` | Stream generated text as it arrives |
 
-`name`/`dbName` arguments are always simple filenames — see [path rules](#path-rules-inside-the-app-filenames-not-paths) above. Window/screen methods are rarely needed — see [below](#window-and-screen--mostly-skip-these). Child-window methods are covered [below](#child-windows--openwindow--closewindow--onwindownavigated--onwindowclosed).
+`name`/`dbName` arguments are always simple filenames — see [path rules](#path-rules-inside-the-app-filenames-not-paths) above. Window/screen methods are rarely needed — see [below](#window-and-screen--mostly-skip-these). Child-window methods are covered [below](#child-windows--openwindow--closewindow--onwindownavigated--onwindowclosed). The `ai.*` methods run a model on the device and are not available on every machine — see [below](#ai--generate--generateobject--stream).
 
 ### Settings — `shell.settings`
 
@@ -497,6 +503,66 @@ Practice:
 - `listCommands()` returns `{ name, program, argsRestricted, timeoutMs }` for each entry — use it to grey out features when an app deployment wasn't configured with the command it needs. `cwd`/`env` values are never exposed to JS.
 - Use `run` for anything that finishes quickly and `spawn` for anything long, chatty, or interactive. `run` buffers everything in memory before it resolves.
 
+### AI — `generate` / `generateObject` / `stream`
+
+Your app can run a language model **on the device**: no API key, no network call, no cost per token — and prompts never leave the machine. The catch is that it is not always there. It needs macOS 26 or newer on Apple silicon with Apple Intelligence turned on, and a shell built with its AI backend; everywhere else `shell.ai` answers honestly that it is unavailable. Treat it as an enhancement, never as a hard dependency.
+
+Optional defaults live in `app.toml`:
+
+```toml
+# app.toml
+[ai]
+enabled = true                                      # optional. false => reason "disabled-by-config"
+instructions = "Answer briefly and in plain text."  # optional: default system prompt
+temperature = 0.7                                   # optional: default sampling temperature
+maxTokens = 512                                     # optional: default response length cap
+toolTimeoutMs = 30000                               # optional: how long to wait for a JS tool handler
+```
+
+```javascript
+// always check first — info() never rejects, generate() does
+const info = await shell.ai.info();
+if (!info.available) {
+  status.textContent = `AI unavailable: ${info.reason}`;
+  return;
+}
+
+// one-shot text
+const { text } = await shell.ai.generate("Summarise this note in one line.", {
+  instructions: "You are concise.",
+  maxTokens: 200,
+});
+
+// structured output — the model is constrained to the schema, so this parses
+const { object } = await shell.ai.generateObject("Tag this note.", {
+  type: "object",
+  properties: {
+    title: { type: "string", description: "Short title" },
+    tags: { type: "array", items: { type: "string" }, maxItems: 5 },
+  },
+  required: ["title", "tags"],
+});
+
+// streaming, into the DOM as it arrives
+const stream = await shell.ai.stream("Write a short poem about the sea.");
+for await (const delta of stream) {
+  out.textContent += delta;
+}
+```
+
+Practice:
+
+- **Availability is a first-class state, not an error case.** `info()`, `available()` and `models()` never reject; `generate`, `generateObject` and `stream` reject with `ai unavailable: <reason> — <detail>` when the model is unusable. Branch on `info()` and grey the feature out — do not let a whole screen fail because a machine has no model.
+- The `reason` is one of a closed set: `unsupported-platform`, `unsupported-os`, `disabled-by-config`, `device-not-eligible`, `not-enabled`, `model-not-ready`, `unavailable`. Only `disabled-by-config` is yours to control.
+- **It is a small model.** Summarising, tagging, extracting fields, rewriting, classifying — yes. Long-context reasoning and world knowledge — no. And there is **no chat history**: every call is a fresh session, so multi-turn behaviour means putting the earlier turns into the prompt yourself.
+- **Prefer `generateObject` whenever you need to act on the answer.** The model is grammatically constrained to your schema as it decodes, so you get parsed JSON instead of prose you have to scrape. Only a subset of JSON Schema is supported (no `$ref`), and an absent `required` means *every* property is required — the opposite of standard JSON Schema. The exact table is in [`ai.md`](ai.md#structured-output).
+- **Tools let the model call back into your JS.** Pass `tools: [{ name, description, parameters, handler }]`; the `handler` never leaves the page. A handler that throws, a tool name you did not register, and a handler that never returns (after `toolTimeoutMs`, default 30s) are all reported *to the model* as errors — none of them aborts the generation. Every attempt comes back in `toolCalls` with exactly one of `result` / `error`.
+- **Streaming loses nothing.** Deltas that arrive before you attach `onText` or start iterating are buffered and replayed — but to the first consumer only, not to every consumer. Await `stream.completed` for `{ text, model, toolCalls }`.
+- **Cancellation is best-effort and does not stop the model.** `stream.cancel()` stops delivery and makes `completed` reject with `cancelled`; the inference still runs to completion in the background and its output is thrown away. It exists on the stream handle only — `generate` and `generateObject` cannot be cancelled, so use `stream` if you need a bail-out button.
+- On error or cancellation the stream's completion carries no text, so accumulate partial output from `onText` yourself if you want to keep it.
+- Per-request `options` (`model`, `instructions`, `temperature`, `maxTokens`, `tools`) override the `[ai]` defaults field by field. `model` must be `"default"` — this shell exposes exactly one.
+- Full reference — reason codes, the schema subset, the tool bridge, the event flow, limitations: [`ai.md`](ai.md).
+
 ### What you get for free, unprompted
 
 - Keyboard shortcuts (`Cmd/Ctrl+Shift+M/I` devtools toggle, `Cmd/Ctrl+Shift+R` reload) and the View menu are injected automatically — don't build your own reload/devtools UI.
@@ -508,6 +574,7 @@ Practice:
 - `readFile`/`deleteFile`/`renameFile`/`openFile`/`openFileLocation` on a missing file — expected whenever the file might not have been created yet, catch it and fall back to defaults.
 - `fetch` network failures — catch and show the user something, don't let it crash silent.
 - A non-zero `code` (or `timedOut: true`) from `run`/`spawn` — these *resolve*, so nothing throws; check the result and tell the user. A rejected `run`/`spawn`, by contrast, means the command isn't allowlisted or your arguments don't match the configured patterns — that's a config/programming error.
+- `shell.ai.generate`/`generateObject`/`stream` on a machine with no usable model — they reject with `ai unavailable: <reason>`. Check `shell.ai.info()` first and disable the feature in your UI instead of catching this per call.
 - Everything else (invalid filename, invalid SQL, bad URL scheme) is a programming error on your part — fix the call, don't defensively swallow it.
 
 ## Full reference example

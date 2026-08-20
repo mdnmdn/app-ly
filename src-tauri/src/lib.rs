@@ -1,3 +1,4 @@
+mod ai;
 mod auth;
 mod commands;
 mod config;
@@ -8,6 +9,10 @@ mod paths;
 mod process;
 mod server;
 
+use ai::{
+    shell_ai_cancel, shell_ai_generate, shell_ai_generate_object, shell_ai_info, shell_ai_stream,
+    shell_ai_tool_result, AiSettings, AiState,
+};
 use auth::shell_auth_via_browser;
 use commands::{
     shell_close_window, shell_delete_file, shell_eval_result, shell_eval_window, shell_fetch,
@@ -19,7 +24,7 @@ use commands::{
 };
 use config::{
     config_fallback_html, default_show_dev_menu, discover_config, effective_show_dev_menu,
-    load_settings, missing_config_message, CommandEntry, DiscoverError,
+    load_settings, missing_config_message, AiConfig, CommandEntry, DiscoverError,
 };
 use db::{shell_db_execute, shell_db_query};
 use http::{header::CONTENT_TYPE, Response, StatusCode};
@@ -151,6 +156,7 @@ struct StartupPlan {
     keychain_prefix: String,
     settings: HashMap<String, String>,
     allowed_commands: Vec<CommandEntry>,
+    ai: Option<AiConfig>,
     config_dir: PathBuf,
 }
 
@@ -181,6 +187,7 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
                 keychain_prefix: "app-ly".into(),
                 settings: HashMap::new(),
                 allowed_commands: Vec::new(),
+                ai: None,
                 config_dir: PathBuf::from("."),
             });
         }
@@ -197,6 +204,7 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
                 keychain_prefix: "app-ly".into(),
                 settings: HashMap::new(),
                 allowed_commands: Vec::new(),
+                ai: None,
                 config_dir: PathBuf::from("."),
             });
         }
@@ -219,6 +227,7 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
                 keychain_prefix: "app-ly".into(),
                 settings: HashMap::new(),
                 allowed_commands: Vec::new(),
+                ai: None,
                 config_dir: PathBuf::from("."),
             });
         }
@@ -247,6 +256,7 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
         keychain_prefix,
         settings,
         allowed_commands: discovery.config.allowed_commands,
+        ai: discovery.config.ai,
         config_dir: discovery.config_dir,
     })
 }
@@ -293,6 +303,7 @@ pub fn run() {
                 plan.allowed_commands.clone(),
                 plan.config_dir.clone(),
             ));
+            app.manage(AiState::new(AiSettings::from_config(plan.ai.as_ref())));
             app.manage(ProtocolState {
                 contents_dir: plan.contents_dir.clone(),
                 fallback_html: plan.fallback_html.clone(),
@@ -366,6 +377,12 @@ pub fn run() {
             shell_process_exit,
             shell_process_set_timeout,
             shell_list_commands,
+            shell_ai_info,
+            shell_ai_generate,
+            shell_ai_generate_object,
+            shell_ai_stream,
+            shell_ai_tool_result,
+            shell_ai_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -47,6 +47,12 @@ app-ly/
 │   │   ├── process.rs         # Allowlisted subprocess execution (shell.run/spawn), argument
 │   │   │                        # matching against the [[allowedCommands]] regex allowlist, and
 │   │   │                        # live process control (stdin, exit/kill, re-armable timeout)
+│   │   ├── ai.rs              # On-device AI (shell.ai): commands, wire types, the JS tool
+│   │   │                        # bridge, the JSON Schema translator, and backend selection
+│   │   ├── ai/
+│   │   │   ├── backend_apple.rs  # macOS backend (FoundationModels via the foundation-models
+│   │   │   │                      # crate); compiled for macOS + the `ai-apple` feature
+│   │   │   └── backend_stub.rs   # fallback for every other build: reports shell.ai unavailable
 │   │   └── menu.rs            # Native app menu (Reload, Open DevTools)
 │   └── gen/schemas/               # Tauri-generated ACL schemas, not hand-edited
 ├── _docs/                    # this documentation set
@@ -77,11 +83,12 @@ untracked.
 Touch all four of these, in order, or the method will compile but silently fail (or not appear)
 at runtime:
 
-1. `src-tauri/src/commands.rs` (or `db.rs`, `auth.rs`, `keyring.rs`, `server.rs`, `process.rs`) — add the `#[tauri::command]` handler.
+1. `src-tauri/src/commands.rs` (or `db.rs`, `auth.rs`, `keyring.rs`, `server.rs`, `process.rs`, `ai.rs`) — add the `#[tauri::command]` handler.
 2. `src-tauri/src/lib.rs` — import it and add it to the `tauri::generate_handler![...]` list.
 3. `src-tauri/permissions/shell.toml` — add the command name to `commands.allow`.
 4. `src-tauri/scripts/shell-api.js` — expose it on `window.shell`.
 
 Then document it in [`js-api.md`](js-api.md) (full reference) and
 [`app-agent-guide.md`](app-agent-guide.md) (summary table + narrative section) for anyone
-building an app against the shell.
+building an app against the shell. The on-device AI surface has its own deep reference in
+[`ai.md`](ai.md).

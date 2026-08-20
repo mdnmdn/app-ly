@@ -9,7 +9,8 @@ build step, or native toolchain required.
 One prebuilt shell binary + your `contents/` HTML *is* your app. The shell exposes
 `window.shell` to that HTML for the things plain web pages can't do: persistent files,
 SQLite databases, CORS-free HTTP, desktop notifications, window/screen control, child
-windows for flows like OAuth, and running local programs from an `app.toml` allowlist.
+windows for flows like OAuth, running local programs from an `app.toml` allowlist, and an
+on-device LLM (text, structured output, tool calling, streaming — no API key, no network).
 Instead of hard-coding a UI into the Rust/Tauri project, each deployment just supplies its
 own `app.toml` + `contents/` + icon.
 
@@ -54,6 +55,8 @@ Or via the [`justfile`](justfile): `just dev`, `just build`, `just check`, `just
 - [`_docs/README.md`](_docs/README.md) — config reference, dev vs. release behavior
 - [`_docs/app-agent-guide.md`](_docs/app-agent-guide.md) — full guide for authoring an app
 - [`_docs/js-api.md`](_docs/js-api.md) — complete `window.shell` API reference
+- [`_docs/ai.md`](_docs/ai.md) — on-device AI (`shell.ai`): platform requirements, availability,
+  structured output, tool calling, streaming
 - [`_docs/project-structure.md`](_docs/project-structure.md) — repo layout and module
   responsibilities, for anyone modifying the shell itself
 

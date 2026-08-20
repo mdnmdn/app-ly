@@ -200,6 +200,272 @@
     },
   };
 
+  // ── AI (internal plumbing) ────────────────────────────────────────
+  // Backs shell.ai.*. Kept outside window.shell so only the documented API
+  // surface is exposed to contents HTML. Streaming follows the same
+  // ordering discipline as shellProc: the event listeners are registered
+  // once and awaited before the invoke, and anything that arrives before a
+  // consumer exists is buffered until one shows up.
+  const shellAi = {
+    states: new Map(), // request id -> stream dispatch state
+    tools: new Map(), // request id -> Map(tool name -> handler)
+    listeners: null,
+    requests: 0,
+
+    // JS owns the request id: handlers can be keyed before the invoke is even
+    // issued, so a tool call that arrives first still binds deterministically.
+    // Rust treats it as opaque and echoes it back on every event for the request.
+    requestId: () =>
+      `ai-${++shellAi.requests}-${Math.random().toString(36).slice(2, 10)}`,
+
+    // The three event listeners are registered once, lazily. Every request
+    // that can produce events awaits this before invoking, so no chunk and
+    // no tool call can arrive before a listener exists.
+    ready: () => {
+      if (!shellAi.listeners) {
+        shellAi.listeners = Promise.all([
+          window.__TAURI__.event.listen("shell://ai-chunk", (event) =>
+            shellAi.chunk(event.payload.id, event.payload.text),
+          ),
+          window.__TAURI__.event.listen("shell://ai-done", (event) =>
+            shellAi.finished(event.payload),
+          ),
+          window.__TAURI__.event.listen("shell://ai-tool-call", (event) =>
+            shellAi.toolCall(event.payload),
+          ),
+        ]).catch((error) => {
+          shellAi.listeners = null; // let the next request retry
+          throw error;
+        });
+      }
+      return shellAi.listeners;
+    },
+
+    // Events may be delivered before the shell_ai_stream invoke resolves, so
+    // state is created by whichever side reaches the id first.
+    state: (id) => {
+      let state = shellAi.states.get(id);
+      if (!state) {
+        state = {
+          handlers: [], // onText callbacks
+          buffered: [], // deltas with no consumer yet, in arrival order
+          iterators: [],
+          done: null, // { text, model, toolCalls }
+          error: null, // message from shell://ai-done, if any
+          completed: null,
+          resolveCompleted: null,
+          rejectCompleted: null,
+          claimed: false,
+        };
+        shellAi.states.set(id, state);
+      }
+      return state;
+    },
+
+    // Once a request is done no further events can arrive for its id, so the
+    // dispatch entry is dropped as soon as both sides are done with it. The
+    // AiStream keeps working through its own closure over `state`.
+    release: (id, state) => {
+      if (state.claimed && state.done) shellAi.states.delete(id);
+    },
+
+    chunk: (id, text) => {
+      const state = shellAi.state(id);
+      if (!state.handlers.length && !state.iterators.length) {
+        state.buffered.push(text);
+        return;
+      }
+      state.handlers.slice().forEach((handler) => handler(text));
+      state.iterators.slice().forEach((iterator) => shellAi.push(iterator, text));
+    },
+
+    finished: (payload) => {
+      const state = shellAi.state(payload.id);
+      state.error = payload.error ?? null;
+      state.done = {
+        text: payload.text ?? "",
+        model: payload.model ?? null,
+        toolCalls: payload.toolCalls || [],
+      };
+      if (state.error) {
+        if (state.rejectCompleted) state.rejectCompleted(new Error(state.error));
+      } else if (state.resolveCompleted) {
+        state.resolveCompleted(state.done);
+      }
+      state.resolveCompleted = null;
+      state.rejectCompleted = null;
+      // Iterators with buffered deltas left finish once those are drained.
+      state.iterators.slice().forEach((iterator) => shellAi.push(iterator, null));
+      shellAi.unregister(payload.id);
+      shellAi.release(payload.id, state);
+    },
+
+    // Hand a delta (or `null` for end-of-stream) to a live iterator: straight
+    // to a waiting next(), otherwise queued so nothing is dropped while the
+    // consumer is awaiting. An empty delta is still a delta, so the
+    // end-of-stream sentinel is checked explicitly.
+    push: (iterator, text) => {
+      if (iterator.done) return;
+      if (!iterator.resolve) {
+        if (text !== null) iterator.queue.push(text);
+        return;
+      }
+      const resolve = iterator.resolve;
+      iterator.resolve = null;
+      resolve(text !== null ? { value: text, done: false } : iterator.finish());
+    },
+
+    // The first handler also drains whatever arrived before it.
+    handler: (state, callback) => {
+      state.handlers.push(callback);
+      if (state.handlers.length === 1) {
+        state.buffered.splice(0).forEach((text) => callback(text));
+      }
+      return () => {
+        const index = state.handlers.indexOf(callback);
+        if (index !== -1) state.handlers.splice(index, 1);
+      };
+    },
+
+    handle: (id) => {
+      const state = shellAi.state(id);
+      state.claimed = true;
+      shellAi.release(id, state);
+      return {
+        id,
+        onText: (callback) => shellAi.handler(state, callback),
+        cancel: () => {
+          if (state.done) return Promise.resolve();
+          return window.__TAURI__.core
+            .invoke("shell_ai_cancel", { id })
+            .catch(() => {});
+        },
+        get completed() {
+          if (!state.completed) {
+            if (state.done) {
+              state.completed = state.error
+                ? Promise.reject(new Error(state.error))
+                : Promise.resolve(state.done);
+            } else {
+              state.completed = new Promise((resolve, reject) => {
+                state.resolveCompleted = resolve;
+                state.rejectCompleted = reject;
+              });
+            }
+          }
+          return state.completed;
+        },
+        [Symbol.asyncIterator]: () => {
+          // A new iterator adopts anything buffered so far, so iteration
+          // started after the first deltas arrived still sees them.
+          const iterator = {
+            queue: state.buffered.splice(0),
+            resolve: null,
+            done: false,
+            finish: () => {
+              iterator.done = true;
+              const index = state.iterators.indexOf(iterator);
+              if (index !== -1) state.iterators.splice(index, 1);
+              return { value: undefined, done: true };
+            },
+          };
+          state.iterators.push(iterator);
+          return {
+            next: () => {
+              if (iterator.done) return Promise.resolve({ value: undefined, done: true });
+              if (iterator.queue.length)
+                return Promise.resolve({ value: iterator.queue.shift(), done: false });
+              if (state.done) return Promise.resolve(iterator.finish());
+              return new Promise((resolve) => {
+                iterator.resolve = resolve;
+              });
+            },
+            return: () => Promise.resolve(iterator.finish()),
+          };
+        },
+      };
+    },
+
+    // ── Tool bridge ─────────────────────────────────────────────────
+    // Handlers stay in JS keyed by request id; only { name, description,
+    // parameters } is sent.
+    register: (id, tools) => {
+      const handlers = new Map();
+      (tools || []).forEach((tool) => {
+        if (tool && tool.name && typeof tool.handler === "function")
+          handlers.set(tool.name, tool.handler);
+      });
+      if (handlers.size) shellAi.tools.set(id, handlers);
+      return handlers;
+    },
+
+    unregister: (id) => shellAi.tools.delete(id),
+
+    handlerFor: (id, name) => {
+      const handlers = shellAi.tools.get(id);
+      return handlers && handlers.get(name);
+    },
+
+    // A handler that throws reports the failure to the model; it must never
+    // leave the backend waiting for its tool timeout.
+    toolCall: async (payload) => {
+      const result = { callId: payload.callId, ok: true, value: null, error: null };
+      try {
+        const handler = shellAi.handlerFor(payload.id, payload.name);
+        if (!handler) throw new Error(`unknown tool "${payload.name}"`);
+        const value = await handler(payload.arguments ?? {});
+        result.value = value === undefined ? null : value;
+      } catch (error) {
+        result.ok = false;
+        result.value = null;
+        result.error = (error && error.message) || String(error);
+      }
+      return window.__TAURI__.core
+        .invoke("shell_ai_tool_result", result)
+        .catch(() => {});
+    },
+
+    specs: (tools) =>
+      (tools || []).map((tool) => ({
+        name: tool.name,
+        description: tool.description || "",
+        parameters: tool.parameters || { type: "object", properties: {} },
+      })),
+
+    options: (options) => ({
+      model: options.model ?? null,
+      instructions: options.instructions ?? null,
+      temperature: options.temperature ?? null,
+      maxTokens: options.maxTokens ?? null,
+      tools: shellAi.specs(options.tools),
+    }),
+
+    unavailable: (error) => ({
+      available: false,
+      reason: "unavailable",
+      detail: (error && error.message) || String(error),
+      models: [],
+      features: { text: false, structured: false, tools: false, streaming: false },
+    }),
+
+    // shell.ai.generate / shell.ai.generateObject: tool handlers are registered
+    // under this request's id and torn down when it finishes, so tools never
+    // leak across requests and concurrent requests never cross-wire.
+    request: async (command, prompt, options, extra) => {
+      const opts = options || {};
+      const requestId = shellAi.requestId();
+      const handlers = shellAi.register(requestId, opts.tools);
+      try {
+        if (handlers.size) await shellAi.ready();
+        const payload = { requestId, prompt, options: shellAi.options(opts) };
+        if (extra) Object.assign(payload, extra);
+        return await window.__TAURI__.core.invoke(command, payload);
+      } finally {
+        shellAi.unregister(requestId);
+      }
+    },
+  };
+
   window.shell = {
     settings: window.__SHELL_SETTINGS__ || {},
     saveFile: (name, contents) =>
@@ -348,5 +614,40 @@
       return shellProc.child(id, pid);
     },
     listCommands: () => window.__TAURI__.core.invoke("shell_list_commands"),
+
+    // ── AI (on-device LLM) ────────────────────────────────────────────
+    ai: {
+      // Never rejects: an unreachable backend reads as "unavailable".
+      info: () =>
+        window.__TAURI__.core
+          .invoke("shell_ai_info")
+          .catch((error) => shellAi.unavailable(error)),
+      available: () => window.shell.ai.info().then((info) => info.available === true),
+      models: () =>
+        window.shell.ai.info().then((info) => (Array.isArray(info.models) ? info.models : [])),
+      generate: (prompt, options) =>
+        shellAi.request("shell_ai_generate", prompt, options),
+      generateObject: (prompt, schema, options) =>
+        shellAi.request("shell_ai_generate_object", prompt, options, { schema }),
+      stream: async (prompt, options) => {
+        const opts = options || {};
+        const requestId = shellAi.requestId();
+        shellAi.register(requestId, opts.tools);
+        try {
+          await shellAi.ready();
+          // Resolves once the listeners are live and the backend has accepted
+          // the request; the handle echoes back the id we supplied.
+          await window.__TAURI__.core.invoke("shell_ai_stream", {
+            requestId,
+            prompt,
+            options: shellAi.options(opts),
+          });
+          return shellAi.handle(requestId);
+        } catch (error) {
+          shellAi.unregister(requestId);
+          throw error;
+        }
+      },
+    },
   };
 })();

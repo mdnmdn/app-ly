@@ -20,6 +20,26 @@ pub struct ShellConfig {
     pub settings: Option<HashMap<String, String>>,
     #[serde(rename = "allowedCommands", default)]
     pub allowed_commands: Vec<CommandEntry>,
+    #[serde(default)]
+    pub ai: Option<AiConfig>,
+}
+
+/// The optional `[ai]` table. Absent means "all defaults, feature on".
+/// Every field is optional so a partial table still parses, and unknown keys
+/// are ignored so a newer app.toml stays loadable by an older shell.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiConfig {
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    #[serde(default)]
+    pub instructions: Option<String>,
+    #[serde(default)]
+    pub temperature: Option<f64>,
+    #[serde(default)]
+    pub max_tokens: Option<u32>,
+    #[serde(default)]
+    pub tool_timeout_ms: Option<u64>,
 }
 
 /// One `[[allowedCommands]]` entry. `program`, `cwd` and `env` come from

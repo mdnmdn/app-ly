@@ -8,6 +8,19 @@ contents = "contents/index.html"
 dataPath = "data"
 showDevMenu = true  # optional; default true in debug, false in release
 
+# optional; on-device AI exposed to contents HTML as `shell.ai`.
+# Absent = every default below, with the feature on. Availability still
+# depends on the platform — `shell.ai.info()` reports why when it is off.
+# [ai]
+# enabled = true              # optional; default true. false => reason "disabled-by-config"
+# instructions = "Answer briefly and in plain text."
+#                             # optional; default system prompt for every request
+# temperature = 0.7           # optional; default sampling temperature
+# maxTokens = 512             # optional; default response length cap
+# toolTimeoutMs = 30000       # optional; default 30000. How long the shell waits for a
+#                             # JS tool handler before answering the model with an error.
+# Per-request options passed to shell.ai.* always override these defaults.
+
 # optional; string-only key/value map, exposed to contents HTML as `shell.settings`.
 # A `.env` file next to this app.toml (KEY=VALUE per line) is merged on top and
 # wins on conflicts — keep secrets/local overrides there instead of in this file.

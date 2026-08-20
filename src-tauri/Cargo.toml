@@ -9,6 +9,13 @@ edition = "2021"
 name = "app_ly_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+default = ["ai-apple"]
+# On-device AI backed by the platform framework. Off => the stub backend,
+# which reports shell.ai as unavailable. Turn it off to build on an older
+# macOS SDK, or without a Swift toolchain.
+ai-apple = ["dep:foundation-models"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -31,3 +38,8 @@ regex = "1"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Optional: pulled in only by the `ai-apple` feature. Compiles a Swift bridge
+# at build time, so it needs Xcode 26 / the macOS 26 SDK.
+foundation-models = { version = "0.11", features = ["macos_26_0"], optional = true }

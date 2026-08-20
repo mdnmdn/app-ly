@@ -41,6 +41,22 @@ args = ["^(status|log|diff)$"]
 timeoutMs = 30000
 ```
 
+An optional `[ai]` table configures the on-device AI available to contents HTML as `shell.ai`.
+The whole table is optional — absent means "all defaults, feature on" — and unknown keys are
+ignored. Per-request options passed to `shell.ai.*` override every one of these. See
+[`ai.md`](ai.md) for the full reference, including platform requirements and the availability
+reason codes.
+
+```toml
+[ai]
+enabled = true                                      # optional, default true. false => reason "disabled-by-config"
+instructions = "Answer briefly and in plain text."  # optional. Default system prompt for every request
+temperature = 0.7                                   # optional. Default sampling temperature
+maxTokens = 512                                     # optional. Default cap on response length
+toolTimeoutMs = 30000                               # optional, default 30000. How long the shell waits for a
+                                                    # JS tool handler before answering the model with an error
+```
+
 ### Dev vs release
 
 | Setting | Dev (`tauri dev`) | Release (`tauri build`) |
@@ -83,4 +99,5 @@ app-ly/
 ```
 
 For the full repo layout, per-file module responsibilities, and the checklist for adding a new
-`window.shell` method, see [`project-structure.md`](project-structure.md).
+`window.shell` method, see [`project-structure.md`](project-structure.md). For on-device AI
+(`shell.ai`), see [`ai.md`](ai.md).

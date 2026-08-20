@@ -44,6 +44,12 @@ commands.allow = [
   "shell_process_exit",
   "shell_process_set_timeout",
   "shell_list_commands",
+  "shell_ai_info",
+  "shell_ai_generate",
+  "shell_ai_generate_object",
+  "shell_ai_stream",
+  "shell_ai_tool_result",
+  "shell_ai_cancel",
 ]
 
 # Reported by a child window's own script (via window.__TAURI__.core.invoke)

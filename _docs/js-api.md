@@ -834,6 +834,200 @@ if (!commands.some((c) => c.name === "git")) {
 }
 ```
 
+## On-device AI (`[ai]`)
+
+`shell.ai` runs a language model **on the device** — no API key, no network request, no endpoint. Prompts and completions never leave the machine through this API.
+
+It is not always available: it needs macOS 26 or newer on Apple silicon with Apple Intelligence turned on, and a shell built with its AI backend. Everywhere else the API still answers, reporting itself unavailable. Full reference, including the complete JSON Schema subset and the architecture: [`ai.md`](ai.md).
+
+An optional `[ai]` table in `app.toml` sets defaults for every request:
+
+```toml
+[ai]
+enabled = true                                      # optional. false => reason "disabled-by-config"
+instructions = "Answer briefly and in plain text."  # optional. Default system prompt
+temperature = 0.7                                   # optional. Default sampling temperature
+maxTokens = 512                                     # optional. Default response length cap
+toolTimeoutMs = 30000                               # optional, default 30000. How long the shell waits
+                                                    # for a JS tool handler before answering the model
+                                                    # with an error. Config-only, no per-request override.
+```
+
+Per-request `options` override these field by field.
+
+### Availability
+
+`shell.ai.info()`, `available()` and `models()` **never reject**. `generate()`, `generateObject()` and `stream()` **do** reject when the model is unusable, with `ai unavailable: <reason> — <detail>` (the detail half is omitted when there is none). Check first:
+
+```javascript
+const info = await shell.ai.info();
+if (!info.available) {
+  status.textContent = `AI unavailable: ${info.reason}`;
+} else {
+  const { text } = await shell.ai.generate("Say hello in five words.");
+  show(text);
+}
+```
+
+`reason` is one of a closed set:
+
+| Code | Meaning |
+|------|---------|
+| `unsupported-platform` | Not macOS, or a build without the AI backend |
+| `unsupported-os` | The OS is too old to have an on-device model API |
+| `disabled-by-config` | `[ai] enabled = false` in `app.toml` |
+| `device-not-eligible` | The hardware/region does not support on-device AI |
+| `not-enabled` | The user has not turned the OS AI feature on |
+| `model-not-ready` | The model is still downloading or preparing |
+| `unavailable` | Any other state the OS reports |
+
+### Request options
+
+Accepted by `generate`, `generateObject`, and `stream` alike. All optional; each overrides the matching `[ai]` default.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `model` | `string` | Must be `"default"` (or omitted) — this shell exposes one model |
+| `instructions` | `string` | System prompt for this request |
+| `temperature` | `number` | Sampling temperature |
+| `maxTokens` | `number` | Response length cap |
+| `tools` | `array` | `{ name, description, parameters, handler }` entries — see [`shell.ai.generate`](#shellaigenerateprompt-options) |
+
+## `shell.ai.info()`
+
+Reports whether the model can be used right now, and what it supports. Never rejects.
+
+- Returns: `Promise<{ available, reason, detail, models, features }>`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `available` | `boolean` | `true` when generation may proceed |
+| `reason` | `string \| null` | `null` when available; otherwise a code from the table above |
+| `detail` | `string \| null` | Human-readable explanation; may be `null` |
+| `models` | `array` | `[]` when unavailable; otherwise `[{ id, name, default }]` |
+| `features` | `object` | `{ text, structured, tools, streaming }` — all `false` when unavailable |
+
+## `shell.ai.available()`
+
+Shorthand for `info().available`. Never rejects.
+
+- Returns: `Promise<boolean>`
+
+## `shell.ai.models()`
+
+The models this shell exposes — exactly one, `{ id: "default", name: "On-device model", default: true }`, or `[]` when unavailable. Never rejects.
+
+- Returns: `Promise<Array<{ id, name, default }>>`
+
+## `shell.ai.generate(prompt, options?)`
+
+One-shot text generation. Runs off the UI thread, so the webview stays responsive.
+
+- `prompt` — the text to answer
+- `options` — optional, see [Request options](#request-options)
+- Returns: `Promise<{ text, model, toolCalls }>`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `text` | `string` | The generated text |
+| `model` | `string` | The model id actually used (always `"default"`) |
+| `toolCalls` | `array` | Every tool call attempted: `{ name, arguments, result, error }`. `[]` if none |
+
+```javascript
+const { text, model } = await shell.ai.generate("Write a haiku about desktop apps.", {
+  instructions: "You are concise.",
+  maxTokens: 200,
+});
+show(`${text}\n\n-- model: ${model}`);
+```
+
+Tools let the model call back into your JavaScript mid-generation. The `handler` never leaves the page — only `{ name, description, parameters }` is sent:
+
+```javascript
+const result = await shell.ai.generate("What time is it in Tokyo?", {
+  tools: [
+    {
+      name: "get_time",
+      description: "Return the current time in an IANA time zone.",
+      parameters: {
+        type: "object",
+        properties: { zone: { type: "string", description: "e.g. Asia/Tokyo" } },
+        required: ["zone"],
+      },
+      handler: ({ zone }) =>
+        new Date().toLocaleTimeString("en-GB", { timeZone: zone }),
+    },
+  ],
+});
+```
+
+Every attempted call lands in `toolCalls` with exactly one of `result` / `error` set. A handler that throws, a tool name the request never registered, and a handler that never returns (after `toolTimeoutMs`) are all reported *to the model* as errors — none of them aborts generation.
+
+## `shell.ai.generateObject(prompt, schema, options?)`
+
+Structured output. The model is grammatically constrained to the schema as it decodes, so the result parses — this is real constrained decoding, not "please reply in JSON" prompting.
+
+- `prompt` — what to produce
+- `schema` — a JSON Schema object
+- `options` — optional, see [Request options](#request-options)
+- Returns: `Promise<{ object, model, toolCalls }>` — `object` is already-parsed JSON
+
+```javascript
+const { object } = await shell.ai.generateObject("Describe the app-ly desktop shell.", {
+  type: "object",
+  properties: {
+    title: { type: "string", description: "Short title" },
+    tags: { type: "array", items: { type: "string" }, maxItems: 5 },
+    rating: { type: "integer", minimum: 1, maximum: 5 },
+  },
+  required: ["title", "tags", "rating"],
+});
+```
+
+Only a subset of JSON Schema is supported: `type`, `description`, `properties`, `required`, `items`, `minItems`/`maxItems`, string `enum`, `anyOf`/`oneOf`, `pattern`, string `const`, and `minimum`/`maximum`. There is no `$ref` support, and **an absent `required` means every property is required** — the opposite of standard JSON Schema. Unsupported keywords are ignored; malformed ones reject before generation starts. The full table of what is supported, ignored, and rejected is in [`ai.md`](ai.md#structured-output).
+
+## `shell.ai.stream(prompt, options?)`
+
+Streaming text generation. Resolves once the listeners are live and the backend has accepted the request, so no delta can be missed by subscribing late.
+
+- `prompt`, `options` — as `generate`
+- Returns: `Promise<AiStream>`
+
+| Member | Type | Description |
+|--------|------|-------------|
+| `id` | `string` | Request id, echoed on every event for this request |
+| `onText(cb)` | `(text: string) => void` → `unsubscribe` | Each text delta; the first handler drains anything buffered before it |
+| `completed` | `Promise<{ text, model, toolCalls }>` | Resolves when generation finishes; rejects on error or cancellation |
+| `cancel()` | `() => Promise<void>` | Best-effort stop; resolves even if already finished |
+| `[Symbol.asyncIterator]` | yields `string` | `for await` over the deltas |
+
+```javascript
+const stream = await shell.ai.stream("Write a short poem about the sea.");
+
+let text = "";
+const stop = stream.onText((delta) => {
+  text += delta;
+  out.textContent = text;
+});
+
+try {
+  await stream.completed;
+} catch (error) {
+  console.warn("stream failed:", error.message); // "cancelled" if you cancelled it
+} finally {
+  stop();
+}
+```
+
+Behavior worth relying on:
+
+- **No delta is lost.** Deltas arriving before a consumer exists are buffered and replayed to the first `onText` handler or the first iterator. The backlog goes to whoever claims it first — not to every consumer.
+- Every chunk for a request is delivered before its completion, so `completed` never resolves ahead of text you have not seen.
+- **`cancel()` is best-effort and does not stop the model.** The inference runs to completion in the background and its output is discarded; the shell stops forwarding deltas and `completed` rejects with `cancelled`.
+- `cancel()` exists on the stream handle only — `generate` and `generateObject` cannot be cancelled.
+- On error or cancellation the completion carries no text. If you need partial output, accumulate it from `onText` yourself.
+- Under the hood the shell listens on `shell://ai-chunk`, `shell://ai-done`, and `shell://ai-tool-call` and dispatches by request id — `shell.ai` subscribes for you, so there is no `onAi*` API to call.
+
 ## `shell.dbQuery(dbName, query, params?)`
 
 Runs a read query against a SQLite database stored in `dataPath`. The database file is created on first use if it does not exist.
@@ -904,6 +1098,9 @@ Common cases:
 - Invalid/non-loopback `returnUrl`, backend redirect with `?error=...`, or timeout in `authViaBrowser`
 - Unknown command name, an argument rejected by an `[[allowedCommands]]` pattern, an invalid regex in that entry, or a missing executable in `run`/`spawn` — note that a non-zero exit status is *not* an error, it resolves with `code` set
 - Unknown or already-exited process id passed to a `ChildProcess`'s `write`/`closeStdin`/`kill`
+- `ai unavailable: <reason> — <detail>` from `shell.ai.generate`/`generateObject`/`stream` when the on-device model cannot be used — check `shell.ai.info()` first (it never rejects)
+- An unsupported or malformed schema passed to `shell.ai.generateObject`, or `options.model` set to anything other than `"default"`
+- `cancelled` as the rejection of a cancelled stream's `completed` — note that a failing tool handler is *not* an error, it is reported to the model and recorded in `toolCalls`
 
 ## Full example
 
@@ -956,3 +1153,10 @@ Common cases:
 - `proc.exit()` sends `SIGTERM` on Unix, which a child may trap, delay, or ignore — it reports that the signal was sent, not that the process stopped. Windows has no `SIGTERM`, so it falls back to a forceful kill and resolves `{ graceful: false }`
 - Timeouts are checked on a short poll rather than a precise timer, so a deadline can fire up to ~20ms late
 - `signal` on a process result is Unix-only and always `null` on Windows
+- `shell.ai` needs macOS 26 or newer on Apple silicon with Apple Intelligence enabled, and a shell built with its AI backend; every other build reports `unsupported-platform` and rejects generation
+- `shell.ai` has no chat history — each call is a fresh session, so multi-turn behavior means putting earlier turns in the prompt yourself
+- One model only (`"default"`); no images, embeddings, token counts, or finish reasons
+- `generateObject` supports a subset of JSON Schema with no `$ref`, and treats an absent `required` as "every property is required"
+- `generateObject` does not stream, and `stream` takes no schema — structured output and streaming are mutually exclusive
+- Cancelling a stream stops delivery but not the inference itself, and `cancel()` exists on the stream handle only — `generate`/`generateObject` cannot be cancelled
+- `toolTimeoutMs` is set in `app.toml` only; there is no per-request or per-tool override, and no overall deadline on a generation
