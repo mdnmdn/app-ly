@@ -1126,6 +1126,33 @@ fn app_ly_logs(context: &Context, request: &Request) -> Result<Value, WdError> {
 
 // ── HTTP server ─────────────────────────────────────────────────────
 
+/// Compares in constant time. The token exists for the case where the endpoint
+/// is reachable from off-box, and there a `==` that returns early on the first
+/// wrong byte lets an attacker walk the secret out one character at a time.
+fn secret_eq(left: &str, right: &str) -> bool {
+    let (left, right) = (left.as_bytes(), right.as_bytes());
+    // Length is not the secret, so branching on it is fine; the content compare
+    // below still visits every byte either way.
+    let mut difference = u8::from(left.len() != right.len());
+    for index in 0..left.len().max(right.len()) {
+        let l = left.get(index).copied().unwrap_or(0);
+        let r = right.get(index).copied().unwrap_or(0);
+        difference |= l ^ r;
+    }
+    difference == 0
+}
+
+/// Strips one `Bearer` scheme, matched case-insensitively as RFC 7235 requires.
+/// A bare token with no scheme is accepted too — it is what `curl -H` users
+/// tend to send, and there is no other scheme to confuse it with.
+fn presented_token(value: &str) -> &str {
+    let value = value.trim();
+    match value.get(..7) {
+        Some(scheme) if scheme.eq_ignore_ascii_case("bearer ") => value[7..].trim_start(),
+        _ => value,
+    }
+}
+
 fn authorized(settings: &WebDriverSettings, request: &tiny_http::Request) -> bool {
     let Some(expected) = &settings.token else {
         return true;
@@ -1133,8 +1160,11 @@ fn authorized(settings: &WebDriverSettings, request: &tiny_http::Request) -> boo
     request.headers().iter().any(|header| {
         let field = header.field.as_str().as_str().to_ascii_lowercase();
         let value = header.value.as_str();
-        (field == "authorization" && value.trim_start_matches("Bearer ").trim() == expected)
-            || (field == "x-auth-token" && value == expected)
+        match field.as_str() {
+            "authorization" => secret_eq(presented_token(value), expected),
+            "x-auth-token" => secret_eq(value.trim(), expected),
+            _ => false,
+        }
     })
 }
 
@@ -1400,6 +1430,30 @@ mod tests {
         let body = find_body(&session, "tag name", "li", Some("e7"), true);
         assert!(body.contains(r#"WD.deref("e7")"#));
         assert!(body.contains("found.map(WD.ref)"));
+    }
+
+    #[test]
+    fn a_bearer_scheme_is_stripped_exactly_once() {
+        assert_eq!(presented_token("Bearer s3cret"), "s3cret");
+        assert_eq!(presented_token("bearer s3cret"), "s3cret");
+        assert_eq!(presented_token("BEARER  s3cret"), "s3cret");
+        // A bare token still works.
+        assert_eq!(presented_token("  s3cret  "), "s3cret");
+        // Only one scheme comes off, so a token that starts with the word
+        // survives instead of being eaten.
+        assert_eq!(presented_token("Bearer Bearer s3cret"), "Bearer s3cret");
+    }
+
+    #[test]
+    fn secret_comparison_matches_only_the_exact_token() {
+        assert!(secret_eq("s3cret", "s3cret"));
+        assert!(!secret_eq("s3cret", "s3crey"));
+        assert!(!secret_eq("s3cret", "s3cre"));
+        assert!(!secret_eq("s3cret", "s3crett"));
+        assert!(!secret_eq("", "s3cret"));
+        // A prefix of nul bytes must not pass the padded compare.
+        assert!(!secret_eq("s3cret\u{0}", "s3cret"));
+        assert!(secret_eq("", ""));
     }
 
     #[test]

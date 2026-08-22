@@ -85,9 +85,23 @@ webdriver: could not listen on 127.0.0.1:4444: <os error>
 - **Off by default.** Nothing listens unless `[webdriver]` is configured or a `--webdriver*` flag
   is passed.
 - **Loopback by default.** `host` defaults to `127.0.0.1`.
-- **Token-gated when configured.** If `token` is set, every request must carry either
-  `Authorization: Bearer <token>` or `X-Auth-Token: <token>`, or it gets HTTP 401. With no token,
-  no auth is required at all — which is exactly why the default bind is loopback-only.
+- **Token-gated when configured.** If `token` is set, every request must carry it, or it gets
+  HTTP 401. With no token, no auth is required at all — which is exactly why the default bind is
+  loopback-only.
+
+  Three accepted forms, all equivalent:
+
+  ```
+  Authorization: Bearer <token>     # scheme matched case-insensitively
+  Authorization: <token>            # bare, no scheme
+  X-Auth-Token: <token>             # surrounding whitespace ignored
+  ```
+
+  Exactly one `Bearer` prefix is stripped, so a token that itself starts with `Bearer ` still
+  works. The comparison is constant-time: the token is most useful precisely when the endpoint is
+  reachable from off-box, and an early-exit compare would let an attacker recover it byte by byte.
+  There is no session-scoped credential — one token gates the whole endpoint, including
+  `GET /status`.
 - **Binding a non-loopback host with no token prints a warning** at startup:
 
   ```
