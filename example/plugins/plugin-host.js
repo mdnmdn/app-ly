@@ -1,15 +1,18 @@
 // Prototype plugin host — runs in the webview, on top of today's shell.spawn.
 //
 // It exists to prove the sidecar model end to end without touching the Rust
-// binary. In the real design this logic lives in src-tauri/src/plugins/ and
-// the page just sees `shell.plugins`; see _docs/plugins.md.
+// binary. In the real design this logic lives in src-tauri/src/plugins/, the
+// registry is built during startup, and the page just sees `shell.plugins`;
+// see _docs/plugins.md.
+//
+// The plugin set is fixed once discovered — adding a plugin means relaunching,
+// never rebuilding. Manifests declare their methods, so the whole JS surface
+// exists before any process starts; $describe only confirms it on start.
 //
 // Exposes window.plugins:
-//   await plugins.discover(["tls-inspect", "os-trust"])  -> manifests
-//   const tls = await plugins.open("tls")                -> starts on first use
-//   await tls.call("inspect", { host: "example.com" })
-//   await tls.api.inspect({ host: "example.com" })       -> same, via Proxy
-//   tls.on("progress", (data) => ...)
+//   await plugins.discover(["tls-inspect", "os-trust"])  -> registry, no spawning
+//   plugins.api.tls.inspect({ host: "example.com" })     -> starts on first call
+//   plugins.get("tls").on("progress", (data) => ...)
 //   await plugins.stopAll()
 (() => {
   const PROTOCOL = 1;
@@ -27,11 +30,14 @@
       this.nextId = 1;
       this.describe = null;
 
-      // `plugin.api.method(params)` sugar. The method list is advisory — the
-      // sidecar is the authority, so unknown names still go over the wire.
-      this.api = new Proxy(
-        {},
-        { get: (_target, method) => (params) => this.call(String(method), params) },
+      // Built from the manifest, so it is a real object with real functions
+      // before anything is spawned — no Proxy, and a typo is a TypeError here
+      // rather than a rejected promise from a live process.
+      this.api = Object.fromEntries(
+        (manifest.methods ?? []).map((method) => [
+          method.name,
+          (params, options) => this.call(method.name, params, options),
+        ]),
       );
     }
 
@@ -63,7 +69,18 @@
       });
       this.proc.onExit((exit) => this.finish(exit));
 
+      // The manifest already defined the surface; this is the drift check.
       this.describe = await this.call("$describe");
+      const declared = (this.manifest.methods ?? []).map((method) => method.name).sort();
+      const actual = (this.describe.methods ?? []).map((method) => method.name).sort();
+      if (String(declared) !== String(actual)) {
+        window.shell?.log?.(
+          `plugin "${this.name}": manifest declares [${declared}], plugin reports [${actual}]`,
+          "warn",
+        );
+        this.emit("drift", { declared, actual });
+      }
+
       this.emit("started", this.describe);
       return this;
     }
@@ -142,11 +159,13 @@
   const registry = new Map();
 
   window.plugins = {
-    // Manifests are fetched over the shell:// protocol, so the plugin folders
-    // have to sit inside `contents` for this prototype. A Rust-side host would
-    // read them from disk instead and could keep plugins out of the UI tree.
+    // Stands in for what the Rust host does during startup. Manifests are
+    // fetched over the shell:// protocol here, so the plugin folders have to
+    // sit inside `contents`; a Rust-side host reads them from disk in
+    // plan_startup() and can keep plugins out of the UI tree entirely.
+    //
+    // No plugin process is started: the manifest is enough to build the API.
     discover: async (dirs) => {
-      const found = [];
       for (const dir of dirs) {
         const response = await fetch(`./${dir}/plugin.json`);
         if (!response.ok) throw new Error(`no manifest in ${dir} (${response.status})`);
@@ -154,18 +173,26 @@
         if (manifest.apiVersion !== PROTOCOL) {
           throw new Error(`${dir}: apiVersion ${manifest.apiVersion}, host speaks ${PROTOCOL}`);
         }
-        registry.set(manifest.name, new Plugin(manifest, dir));
-        found.push({ dir, ...manifest });
+        const plugin = new Plugin(manifest, dir);
+        registry.set(manifest.name, plugin);
+        window.plugins.api[manifest.name] = plugin.api;
       }
-      return found;
+      return window.plugins.list();
     },
+
+    // `plugins.api.tls.inspect(...)` — populated by discover, before any spawn.
+    api: {},
 
     list: () => [...registry.values()].map((plugin) => ({
       name: plugin.name,
       title: plugin.manifest.title,
+      kind: plugin.manifest.kind,
+      capabilities: plugin.manifest.capabilities ?? [],
       running: Boolean(plugin.proc),
-      methods: plugin.describe?.methods ?? null,
+      methods: plugin.manifest.methods ?? [],
     })),
+
+    get: (name) => registry.get(name) ?? null,
 
     open: async (name) => {
       const plugin = registry.get(name);
@@ -173,7 +200,11 @@
       return plugin.start();
     },
 
-    get: (name) => registry.get(name) ?? null,
+    call: (name, method, params, options) => {
+      const plugin = registry.get(name);
+      if (!plugin) throw new Error(`no plugin named "${name}" — call discover() first`);
+      return plugin.call(method, params, options);
+    },
 
     stopAll: () => Promise.all([...registry.values()].map((plugin) => plugin.stop())),
   };

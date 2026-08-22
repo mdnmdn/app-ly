@@ -6,5 +6,18 @@
   "command": "node",
   "entry": "main.mjs",
   "capabilities": ["fs:read", "run"],
-  "description": "Reads OS-level facts and the platform trust store, using OS APIs, CLI tools and the filesystem."
+  "description": "Reads OS-level facts and the platform trust store, using OS APIs, CLI tools and the filesystem.",
+  "methods": [
+    { "name": "platform", "description": "Machine and OS facts from the Node os module" },
+    {
+      "name": "env",
+      "description": "Selected environment variables",
+      "params": { "keys": "string[]" }
+    },
+    {
+      "name": "trustAnchors",
+      "description": "Certificates in the OS trust store",
+      "params": { "limit": "number?" }
+    }
+  ]
 }

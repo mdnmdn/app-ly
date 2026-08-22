@@ -58,14 +58,15 @@
   <body>
     <h1>Plugin host prototype</h1>
     <p class="hint">
-      Two sidecar plugins, started on demand through <code>shell.spawn</code>, talking
-      newline-delimited JSON over stdio. No Rust code knows what TLS or a trust store is.
+      Two sidecar plugins, registered from their manifests at page load and started on demand
+      through <code>shell.spawn</code>, talking newline-delimited JSON over stdio. No Rust code
+      knows what TLS or a trust store is; adding a method means editing one <code>.mjs</code>
+      file and relaunching.
     </p>
 
     <section>
       <h2>Registry</h2>
-      <button id="discover">Discover plugins</button>
-      <button id="list">List</button>
+      <button id="list">List (built from manifests at load)</button>
       <button id="stop">Stop all</button>
     </section>
 
@@ -109,20 +110,27 @@
 
       const host = () => document.getElementById("host").value.trim();
 
-      const ready = async () => {
-        if (!window.plugins.list().length) {
-          await window.plugins.discover(["tls-inspect", "os-trust"]);
-        }
+      // Stands in for shell startup: the registry is built once, from manifests
+      // alone, and every plugin method exists as a real function from here on —
+      // before a single sidecar process has been started.
+      const registry = window.plugins
+        .discover(["tls-inspect", "os-trust"])
+        .then((found) => {
+          show("Registry (nothing started yet)", found);
+          return found;
+        })
+        .catch((error) => {
+          show("Discovery failed", String(error?.message ?? error));
+          throw error;
+        });
+
+      const api = async (name) => {
+        await registry;
+        return window.plugins.api[name];
       };
 
-      const use = async (name) => {
-        await ready();
-        return window.plugins.open(name);
-      };
-
-      on("discover", "Discovered", () => window.plugins.discover(["tls-inspect", "os-trust"]));
       on("list", "Registry", async () => {
-        await ready();
+        await registry;
         return window.plugins.list();
       });
       on("stop", "Stopped", async () => {
@@ -131,11 +139,12 @@
       });
 
       on("inspect", "Certificate chain", async () =>
-        (await use("tls")).api.inspect({ host: host() }),
+        (await api("tls")).inspect({ host: host() }),
       );
-      on("expiry", "Expiry", async () => (await use("tls")).api.expiry({ host: host() }));
+      on("expiry", "Expiry", async () => (await api("tls")).expiry({ host: host() }));
       on("check", "Bulk check", async () => {
-        const tls = await use("tls");
+        await registry;
+        const tls = window.plugins.get("tls");
         const off = tls.on("progress", (data) => {
           out.textContent = `Checking ${data.host ?? ""} (${data.done}/${data.total})…`;
         });
@@ -150,8 +159,8 @@
         }
       });
 
-      on("platform", "Platform", async () => (await use("os")).api.platform());
-      on("anchors", "Trust anchors", async () => (await use("os")).api.trustAnchors({ limit: 10 }));
+      on("platform", "Platform", async () => (await api("os")).platform());
+      on("anchors", "Trust anchors", async () => (await api("os")).trustAnchors({ limit: 10 }));
     </script>
   </body>
 </html>

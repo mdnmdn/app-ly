@@ -6,5 +6,22 @@
   "command": "node",
   "entry": "main.mjs",
   "capabilities": ["net"],
-  "description": "Opens a TLS connection and reports the certificate chain the peer presents."
+  "description": "Opens a TLS connection and reports the certificate chain the peer presents.",
+  "methods": [
+    {
+      "name": "inspect",
+      "description": "Full certificate chain for a host",
+      "params": { "host": "string", "port": "number?", "insecure": "boolean?" }
+    },
+    {
+      "name": "expiry",
+      "description": "Days remaining on the leaf certificate",
+      "params": { "host": "string", "port": "number?" }
+    },
+    {
+      "name": "check",
+      "description": "Expiry for several hosts at once, emits progress events",
+      "params": { "hosts": "string[]", "warnDays": "number?" }
+    }
+  ]
 }

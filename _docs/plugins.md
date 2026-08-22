@@ -2,8 +2,9 @@
 
 How `app-ly` could gain a plugin system where **adding a capability does not mean rebuilding the
 Rust binary**: a plugin is dropped next to `app.toml`, declared in config, and shows up in the
-page as a JS API. Plugins may be compiled or interpreted, and must be able to touch things the
-shell has no code for — CLI tools, the filesystem outside `dataPath`, and OS APIs.
+page as a JS API after a restart. Plugins may be compiled or interpreted, and must be able to
+touch things the shell has no code for — CLI tools, the filesystem outside `dataPath`, and OS
+APIs.
 
 This is a design exploration, not a shipped feature. A working prototype lives in
 [`example/plugins/`](../example/plugins/) and runs on today's binary with no Rust changes — see
@@ -26,6 +27,34 @@ sandbox (WASM — which then *cannot* reach OS APIs without host support), or ru
 process. Everything below follows from that fork.
 
 Requirements 1 and 2 are comparatively easy and are satisfied by all candidates.
+
+### What "runtime" means here
+
+**Installing or changing a plugin costs an app restart. It must never cost a rebuild.** Hot-swap
+into a running app — dropping in a plugin folder and seeing it appear without relaunching — is
+explicitly out of scope. That is a real relaxation, and it simplifies the design in five places:
+
+1. **The registry is immutable after startup.** Plugins are discovered, validated and registered
+   once in `setup()`; nothing mutates the set afterwards. No live re-registration, no lock
+   juggling over a map that the webview and a supervisor thread both mutate.
+2. **The JS surface can be static.** Because the method list is known before the window exists,
+   the shell can generate `shell.plugins.tls.inspect()` as a real function inside the
+   `initialization_script`, right beside `shell-api.js`. No async `Proxy`, no `await open()`
+   before the first call, no round-trip just to learn a plugin's shape (see §5.4).
+3. **Failures land at startup, where the shell already handles them.** A missing manifest, an
+   `apiVersion` mismatch, a plugin folder that vanished — all detectable in `plan_startup()`, and
+   reportable through the existing `config_fallback_html` error page instead of surfacing as a
+   rejected promise halfway through a session.
+4. **Nothing ever needs unloading.** Unloading is the genuinely hard part of both the dylib and
+   the WASM tiers — `dlclose` with live function pointers is a crash waiting to happen. Load
+   once, run for the process lifetime, restart to change: the problem disappears.
+5. **Interpreted plugins lose their headline advantage.** Hot reload was the main argument for
+   embedding a script engine (§3E); without it, that option is weaker still.
+
+One distinction to keep sharp, because the words overlap: the **plugin set** is fixed for the
+life of the process, but a sidecar's **process** is not. Lazy start, idle stop, and respawn after
+a crash all still apply — that is process lifecycle, not plugin lifecycle, and it needs no
+restart (§5.7).
 
 ---
 
@@ -55,7 +84,8 @@ sequencing — the first version of this feature is mostly formalisation, not ne
 
 A plugin is an ES module under `contents/`, loaded with `import()`. Zero shell work.
 
-- **Yes:** trivially hot-reloadable, no protocol, full DOM access.
+- **Yes:** no protocol, no process, full DOM access; reloading the page is enough to pick up a
+  change (which the restart-is-fine rule makes a non-differentiator anyway).
 - **No:** a plugin has exactly the powers the page already has — no OS APIs, no filesystem beyond
   `dataPath`, no CLI unless already allowlisted. It cannot satisfy requirement 3 at all.
 - **Verdict:** useful for UI-level extensions, not a plugin *runtime*. Keep it as the free tier.
@@ -137,9 +167,10 @@ pub extern "C" fn app_ly_plugin_v1() -> *const PluginVTable { /* … */ }
 
 Ship a script engine inside the binary; plugins are `.rhai` / `.lua` / `.js` files.
 
-- **Yes:** hot-reload, tiny plugins, one artefact for all platforms, safe by default (the engine
-  exposes only what you register), great for glue and config-like logic. Rhai in particular is
-  ~1 MB and pure Rust.
+- **Yes:** tiny plugins, one artefact for all platforms, safe by default (the engine exposes only
+  what you register), great for glue and config-like logic. Rhai in particular is ~1 MB and pure
+  Rust. Hot reload is the usual headline argument — and it is worth nothing here, since a restart
+  is acceptable.
 - **No:** the plugin's power is *exactly* the set of host functions you compiled in — so adding a
   new OS capability still means rebuilding the shell, which is the thing this exercise is trying
   to avoid. Deno core drags in V8 (~40 MB, long build). Every engine is a new supply-chain and
@@ -163,6 +194,10 @@ Ship a script engine inside the binary; plugins are `.rhai` / `.lua` / `.js` fil
 | Per-call cost | ~0 | ~0.1–1 ms | ~µs | ~µs | ~µs |
 | Added binary size | 0 | 0 | ~5–8 MB | ~0 | 1–40 MB |
 | Work to first version | none | **small** | medium | medium | medium |
+
+Deliberately not a row: *hot-swap without restart*. Under the scoping above it is not a
+requirement, which costs the interpreter column its main selling point and costs the dylib and
+WASM columns their hardest implementation problem (unloading).
 
 ---
 
@@ -204,6 +239,9 @@ idleStopMs = 60000                 # optional; stop after this long unused (cf. 
 env = { NODE_ENV = "production" }  # optional; merged over the inherited environment
 ```
 
+Like every other key in `app.toml`, these are read once at startup — adding, removing or
+re-granting a plugin takes effect on the next launch.
+
 ### 5.2 Manifest — `plugin.toml`, next to the plugin
 
 What the *plugin* declares about itself. Parsed by the existing `toml` crate in Rust. Unknown
@@ -222,10 +260,28 @@ args = []
 
 capabilities = ["net"]             # what it *asks* for; app.toml decides what it gets
 clientScript = "client.js"         # optional; injected into the page, see 5.4
+
+# The JS surface, declared rather than discovered. Read at startup, so the shell
+# can build shell.plugins.tls.* without starting a single plugin process.
+[[methods]]
+name = "inspect"
+description = "Full certificate chain for a host"
+params = { host = "string", port = "number?", insecure = "boolean?" }
+
+[[methods]]
+name = "expiry"
+description = "Days remaining on the leaf certificate"
+params = { host = "string", port = "number?" }
 ```
 
 Two files, deliberately. `app.toml` says *whether and with what*; `plugin.toml` says *what it is
 and how to start it*. Merging them would put the plugin author in charge of their own grants.
+
+Declaring `[[methods]]` in the manifest — rather than asking the plugin at startup — is what the
+restart-not-recompile scoping buys. The shell reads a file it was going to read anyway, and the
+whole JS surface exists before the window is created, with no process spawned and no startup time
+spent on plugins the session never uses. `$describe` stays in the protocol, demoted to a
+consistency check (§5.3).
 
 ### 5.3 Wire protocol v1 (sidecar)
 
@@ -248,7 +304,7 @@ Reserved methods, all `$`-prefixed so they can never collide with a plugin's own
 
 | Method | Purpose |
 |---|---|
-| `$describe` | Handshake. Returns `{ name, apiVersion, methods: [{ name, description, params }] }` — the source of truth for the generated JS proxy |
+| `$describe` | Handshake, sent once when a plugin process starts. Returns `{ name, apiVersion, methods }`. The manifest is what the JS surface is built from; this is the cross-check — a mismatch means the manifest and the code have drifted, and is worth a `shell.log` warning rather than a hard failure |
 | `$cancel` | `{ id }` — abandon an in-flight call |
 | `$shutdown` | Exit cleanly; the host kills after a grace period |
 
@@ -260,24 +316,37 @@ notifications, or the keychain without re-implementing them.
 
 ### 5.4 JS surface
 
+Because the plugin set is fixed at startup (§1), the surface is **generated into the
+initialization script**, not discovered at runtime. `lib.rs` already assembles that script from
+`shell-api.js` + `shell-shortcuts.js` and injects `window.__SHELL_SETTINGS__` the same way; the
+plugin registry adds one more block:
+
 ```js
-// Discovery
-await shell.plugins.list();
-// [{ name: "tls", title: "TLS certificate inspector", running: false, kind: "sidecar",
-//    methods: [{ name: "inspect", description: "…" }], grants: ["net"] }]
-
-// Direct call — starts the plugin on first use
-await shell.plugins.call("tls", "inspect", { host: "example.com" });
-
-// Handle, with a proxy generated from $describe
-const tls = await shell.plugins.open("tls");
-await tls.inspect({ host: "example.com" });
-const off = tls.on("progress", (data) => render(data));
-await tls.stop();
-
-// Namespaced sugar, for plugins the app treats as first-class
-await shell.plugins.tls.inspect({ host: "example.com" });
+// Generated in shell_init_script() from the manifests, before any page script runs.
+window.__SHELL_PLUGINS__ = [
+  { name: "tls", title: "TLS certificate inspector", kind: "sidecar", grants: ["net"],
+    methods: [{ name: "inspect", description: "…" }, { name: "expiry", description: "…" }] },
+];
 ```
+
+`shell-api.js` walks that array and builds real functions, so the page sees this — synchronously,
+on first paint, with nothing running yet:
+
+```js
+shell.plugins.list();                                    // sync: the manifests, already here
+shell.plugins.tls.inspect({ host: "example.com" });      // starts the plugin on first call
+shell.plugins.call("tls", "inspect", { host: "…" });     // same thing, dynamic name
+
+const tls = shell.plugins.get("tls");                    // sync handle, no await
+const off = tls.on("progress", (data) => render(data));
+await tls.start();                                       // optional; first call does it anyway
+await tls.stop();                                        // idle stop does it anyway
+tls.running;                                             // boolean
+```
+
+Three things fall out of this that a discover-at-runtime design cannot offer: no `await` before
+the first call, autocomplete in devtools for a plugin that has never run, and a `TypeError` on a
+misspelled method instead of a rejected promise from a live process.
 
 `clientScript` is the ergonomic escape hatch: a plugin ships a JS file, the shell appends it to
 the `initialization_script` (alongside `shell-api.js` and `shell-shortcuts.js`), and the plugin
@@ -342,16 +411,39 @@ goes through the four-step checklist in
 
 ### 5.7 Lifecycle
 
-- **Lazy start** on first call (`autostart = true` opts into eager start), so an unused plugin
-  costs nothing.
-- **Handshake** with `$describe` before the first user call resolves; a plugin whose `apiVersion`
-  the host does not speak is rejected with a clear message rather than half-loaded.
+Two lifecycles, on purpose. Conflating them is what makes plugin systems complicated.
+
+**The plugin set — once, at startup, changed only by restarting.** In `plan_startup()`, beside
+the existing config and path resolution:
+
+1. read each `[[plugins]]` entry, resolve its folder against the `app.toml` directory;
+2. parse `plugin.toml`, reject an `apiVersion` the host does not speak;
+3. check the entry point exists and the grants asked for are granted;
+4. build the `window.__SHELL_PLUGINS__` block for the init script.
+
+Nothing is spawned, nothing is `dlopen`ed, nothing is instantiated. A failure here is a
+*configuration* failure and should read like one — same `config_fallback_html` page the shell
+already shows for a bad `app.toml`, naming the plugin and what is wrong with it. A plugin folder
+edited while the app runs is simply not noticed; that is the deal, and it should be said out loud
+in the docs rather than half-supported.
+
+**A plugin's process — lazily, repeatedly, without a restart.** This is ordinary supervision and
+none of it needs the app to relaunch:
+
+- **Lazy start** on first call (`autostart = true` opts into eager start), so a plugin the session
+  never touches costs nothing at all.
+- **Handshake** with `$describe` on start; a drift from the manifest is logged, not fatal.
 - **Idle stop** after `idleStopMs`, following the connection cache in `db.rs`.
-- **Crash handling**: pending calls reject with the exit code; the next call restarts the plugin.
-  A crash loop (N restarts in M seconds) disables the plugin and surfaces the reason in
-  `shell.plugins.list()`.
+- **Crash handling**: pending calls reject with the exit code; the next call respawns. A crash
+  loop (N restarts in M seconds) marks the plugin failed and surfaces the reason in
+  `shell.plugins.list()` — the JS surface stays in place, calls just reject with why.
 - **Shutdown**: `$shutdown`, then kill after a grace period. Nothing is left orphaned when the
   window closes.
+
+For the WASM and native tiers, "start" is instantiate/`dlopen` and there is no stop: they load on
+first call and stay for the life of the process. Skipping unload is a deliberate simplification —
+`dlclose` with live function pointers is a crash waiting to happen, and the restart-not-recompile
+rule means nothing is gained by attempting it.
 
 ---
 
@@ -479,17 +571,21 @@ args = ["^[\\w.-]+/[\\w.-]+\\.mjs$"]
 ```
 
 **What it proves.** Sidecar plugins work on today's binary. `shell.spawn`'s stdio is a sufficient
-transport, including partial-line chunking and concurrent in-flight calls. A `$describe`
-handshake is enough to generate a usable JS proxy. Events (`progress`) and per-call timeouts with
-`$cancel` behave. Both example plugins reach things the shell has no code for — TLS chains, a CLI
-tool, files outside `dataPath`, OS APIs.
+transport, including partial-line chunking and concurrent in-flight calls. Manifest-declared
+methods are enough to build the JS surface before anything starts, with `$describe` confirming it
+on start. Events (`progress`) and per-call timeouts with `$cancel` behave. Both example plugins
+reach things the shell has no code for — TLS chains, a CLI tool, files outside `dataPath`, OS
+APIs. Adding a method to either plugin means editing one `.mjs` file and relaunching — the
+restart-not-recompile bar, met.
 
 **What it fakes,** and what moving the host into Rust would fix:
 
 | Prototype | Rust host |
 |---|---|
-| Manifests fetched over `shell://`, so plugins must live inside `contents` | Read from disk; plugins live anywhere, out of the UI tree |
+| Manifests fetched over `shell://`, so plugins must live inside `contents` | Read from disk in `plan_startup()`; plugins live anywhere, out of the UI tree |
 | `plugin.json` (the webview has no TOML parser) | `plugin.toml`, via the `toml` crate already in the tree |
+| `await plugins.discover([...])` before the surface exists — the page has to ask | `window.__SHELL_PLUGINS__` injected into the init script; `shell.plugins.tls.inspect` is there on first paint (§5.4) |
+| A bad manifest fails when the page happens to call it | Fails at startup, on the `config_fallback_html` page, naming the plugin |
 | Any page script can reach `window.plugins` and spawn any allowlisted `.mjs` | Registry and grants enforced in Rust; the page names a plugin, never a program |
 | No grants, no idle stop, no restart policy, no crash-loop backoff | All of §5.5 and §5.7 |
 | Host functions (plugin → shell) unimplemented | Symmetric protocol, gated by grants |
@@ -500,7 +596,7 @@ tool, files outside `dataPath`, OS APIs.
 
 | Step | Scope | Rough effort |
 |---|---|---|
-| 1. Protocol + manifest + registry, sidecar transport, `shell.plugins` JS surface, docs | `plugins.rs`, `plugins/protocol.rs`, `plugins/sidecar.rs`, `shell-api.js`, ACL | ~2–3 days |
+| 1. Manifest + startup registry + generated JS surface, protocol, sidecar transport, docs | `plugins.rs`, `plugins/protocol.rs`, `plugins/sidecar.rs`, `lib.rs`, `shell-api.js`, ACL | ~2 days |
 | 2. Lifecycle hardening: idle stop, crash-loop backoff, `$cancel`, host functions, logging | Same files | ~1 day |
 | 3. `clientScript` injection | `lib.rs` init-script assembly | ~2 hours |
 | 4. WASM tier via Extism, behind `plugins-wasm` | `plugins/wasm.rs`, `Cargo.toml` | ~2 days |
@@ -516,8 +612,8 @@ Steps 1–3 deliver the whole stated requirement set. Steps 4 and 5 are demand-d
 1. **Do plugins ship UI?** A plugin contributing HTML panels or menu items is a much larger
    design (asset serving over `shell://`, CSS isolation, a menu contribution model). Deliberately
    excluded above; worth deciding before the manifest format ossifies.
-2. **Discovery vs. declaration.** Should the shell scan a `plugins/` folder and offer what it
-   finds, or only load what `app.toml` names? Declaration-only is safer and matches
+2. **Discovery vs. declaration.** Should the shell scan a `plugins/` folder at startup and offer
+   what it finds, or only load what `app.toml` names? Declaration-only is safer and matches
    `[[allowedCommands]]`; scanning is friendlier. A middle path: scan for *listing*, load only
    what is declared.
 3. **Where do plugins live in a deployed app?** Beside `app.toml` (writable, user-installable) or
@@ -526,3 +622,9 @@ Steps 1–3 deliver the whole stated requirement set. Steps 4 and 5 are demand-d
    now; if not, `Content-Length` framing or a side channel over the existing `server.rs`.
 5. **Per-plugin sandboxing.** Is `sandbox-exec`/seccomp worth wiring for the sidecar tier, or is
    WASM the answer for anything that needs real confinement?
+6. **Is "restart to reload" good enough in development?** It is by definition good enough in
+   production. But editing a plugin while building an app means relaunching the shell each time,
+   where today's `Cmd/Ctrl + Shift + R` reloads contents in place. A dev-only `shell.plugins`
+   reload — restart the process, re-read the manifest, leave the generated surface alone — would
+   be cheap for the sidecar tier and impossible for the native one. Worth deciding whether that
+   asymmetry is acceptable before it gets built.
