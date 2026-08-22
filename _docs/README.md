@@ -57,6 +57,20 @@ toolTimeoutMs = 30000                               # optional, default 30000. H
                                                     # JS tool handler before answering the model with an error
 ```
 
+An optional `[webdriver]` table turns on an in-process W3C WebDriver endpoint for controlling and
+debugging a running app (Selenium, WebdriverIO, plain `curl`). It's off by default, and loopback-only
+by default when on; `--webdriver`, `--webdriver-port`, `--webdriver-host`, `--webdriver-token`, and
+`--no-webdriver` CLI flags override this table. See [`webdriver.md`](webdriver.md) for the full
+reference, including auth, sessions, and the implemented command set.
+
+```toml
+[webdriver]
+enabled = true        # optional; a present [webdriver] table means on unless this is false
+host = "127.0.0.1"    # optional; default "127.0.0.1"
+port = 4444           # optional; default 4444
+token = "s3cret"      # optional; when set, requests must carry it
+```
+
 ### Dev vs release
 
 | Setting | Dev (`tauri dev`) | Release (`tauri build`) |
@@ -100,4 +114,4 @@ app-ly/
 
 For the full repo layout, per-file module responsibilities, and the checklist for adding a new
 `window.shell` method, see [`project-structure.md`](project-structure.md). For on-device AI
-(`shell.ai`), see [`ai.md`](ai.md).
+(`shell.ai`), see [`ai.md`](ai.md). For the WebDriver endpoint, see [`webdriver.md`](webdriver.md).

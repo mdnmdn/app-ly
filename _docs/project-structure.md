@@ -30,7 +30,8 @@ app-ly/
 │   ├── icons/                 # app icon set for bundling (all platforms)
 │   ├── scripts/
 │   │   ├── shell-api.js       # defines window.shell; injected via initialization_script
-│   │   └── shell-shortcuts.js # devtools/reload keyboard shortcuts; injected alongside it
+│   │   ├── shell-shortcuts.js # devtools/reload keyboard shortcuts; injected alongside it
+│   │   └── webdriver-harness.js # JS harness eval'd via the WebDriver command bridge
 │   ├── src/
 │   │   ├── main.rs            # binary entrypoint, calls lib::run()
 │   │   ├── lib.rs             # app setup: discovers app.toml, builds the main window,
@@ -44,6 +45,8 @@ app-ly/
 │   │   ├── auth.rs            # Shared-listener authViaBrowser with concurrent flow support
 │   │   ├── keyring.rs         # OS keychain secure store (secretSet/Get/Delete)
 │   │   ├── server.rs          # Embedded HTTP server + WebSocket server
+│   │   ├── webdriver.rs       # In-process W3C WebDriver subset: HTTP endpoint, session/element
+│   │   │                        # model, JS harness bridge
 │   │   ├── process.rs         # Allowlisted subprocess execution (shell.run/spawn), argument
 │   │   │                        # matching against the [[allowedCommands]] regex allowlist, and
 │   │   │                        # live process control (stdin, exit/kill, re-armable timeout)
@@ -91,4 +94,5 @@ at runtime:
 Then document it in [`js-api.md`](js-api.md) (full reference) and
 [`app-agent-guide.md`](app-agent-guide.md) (short example next to each API) for anyone
 building an app against the shell. The on-device AI surface has its own deep reference in
-[`ai.md`](ai.md).
+[`ai.md`](ai.md), and the WebDriver endpoint (which adds no `window.shell` method — it drives the
+page from outside via `webdriver.rs`) has its own in [`webdriver.md`](webdriver.md).

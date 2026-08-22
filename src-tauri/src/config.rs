@@ -22,6 +22,8 @@ pub struct ShellConfig {
     pub allowed_commands: Vec<CommandEntry>,
     #[serde(default)]
     pub ai: Option<AiConfig>,
+    #[serde(default)]
+    pub webdriver: Option<WebDriverConfig>,
 }
 
 /// The optional `[ai]` table. Absent means "all defaults, feature on".
@@ -40,6 +42,23 @@ pub struct AiConfig {
     pub max_tokens: Option<u32>,
     #[serde(default)]
     pub tool_timeout_ms: Option<u64>,
+}
+
+/// The optional `[webdriver]` table. Absent means the endpoint stays off;
+/// present but without `enabled` means on, since writing the table at all is
+/// how you ask for it. Every field is optional so a partial table still
+/// parses, and CLI flags override whatever lands here.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WebDriverConfig {
+    #[serde(default)]
+    pub enabled: Option<bool>,
+    #[serde(default)]
+    pub host: Option<String>,
+    #[serde(default)]
+    pub port: Option<u16>,
+    #[serde(default)]
+    pub token: Option<String>,
 }
 
 /// One `[[allowedCommands]]` entry. `program`, `cwd` and `env` come from
