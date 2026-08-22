@@ -134,6 +134,7 @@ mod tests {
             settings: None,
             allowed_commands: Vec::new(),
             ai: None,
+            webdriver: None,
         }
     }
 

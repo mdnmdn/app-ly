@@ -23,3 +23,11 @@ timeoutMs = 10000
 # temperature = 0.7
 # maxTokens = 512
 # toolTimeoutMs = 30000
+
+# WebDriver endpoint. Everything here is optional — uncomment to change a default.
+# See app.toml.example for what each key does.
+# [webdriver]
+# enabled = true
+# host = "127.0.0.1"
+# port = 4444
+# token = "s3cret"

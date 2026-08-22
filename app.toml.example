@@ -20,6 +20,18 @@ showDevMenu = true  # optional; default true in debug, false in release
 #                             # JS tool handler before answering the model with an error.
 # Per-request options passed to shell.ai.* always override these defaults.
 
+# optional; W3C WebDriver endpoint served from inside the shell process.
+# Off by default. Absent [webdriver] table = endpoint off. Binds 127.0.0.1 by default.
+# CLI flags --webdriver, --webdriver-port, --webdriver-host, --webdriver-token and
+# --no-webdriver override this table. Anyone who can reach the port can run arbitrary
+# JavaScript in the app, so keep it on loopback or set a token.
+# [webdriver]
+# enabled = true              # optional; default true when the table is present
+# host = "127.0.0.1"          # optional; default "127.0.0.1"
+# port = 4444                 # optional; default 4444
+# token = "s3cret"            # optional; shared secret — required as Authorization:
+#                             # Bearer <token> or X-Auth-Token header, else HTTP 401
+
 # optional; string-only key/value map, exposed to contents HTML as `shell.settings`.
 # A `.env` file next to this app.toml (KEY=VALUE per line) is merged on top and
 # wins on conflicts — keep secrets/local overrides there instead of in this file.

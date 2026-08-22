@@ -44,6 +44,10 @@ app-ly.app/Contents/MacOS/app-ly ai "say hi"
 Full walkthrough and `window.shell` reference:
 [`_docs/app-agent-guide.md`](_docs/app-agent-guide.md).
 
+The shell can also expose a W3C WebDriver endpoint for controlling and debugging a running app
+(Selenium, WebdriverIO, or plain `curl`) — off by default, turned on with `--webdriver` or a
+`[webdriver]` table in `app.toml`. See [`_docs/webdriver.md`](_docs/webdriver.md).
+
 ## Working on the shell itself
 
 ```bash
@@ -64,6 +68,8 @@ Or via the [`justfile`](justfile): `just dev`, `just build`, `just check`, `just
 - [`_docs/js-api.md`](_docs/js-api.md) — complete `window.shell` API reference
 - [`_docs/ai.md`](_docs/ai.md) — on-device AI (`shell.ai`): platform requirements, availability,
   structured output, tool calling, streaming
+- [`_docs/webdriver.md`](_docs/webdriver.md) — W3C WebDriver endpoint: enabling, auth, sessions,
+  implemented commands
 - [`_docs/project-structure.md`](_docs/project-structure.md) — repo layout and module
   responsibilities, for anyone modifying the shell itself
 

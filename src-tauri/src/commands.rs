@@ -664,7 +664,7 @@ struct EvalOutcome {
 // `AsyncFunction(code)` (rather than splicing `code` into the script text)
 // means a syntax error in `code` throws where it's caught below, instead of
 // breaking the surrounding script.
-async fn eval_in_window(
+pub(crate) async fn eval_in_window(
     state: &EvalState,
     window: &tauri::WebviewWindow,
     code: &str,

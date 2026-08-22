@@ -356,8 +356,8 @@ const text = await shell.getWindowBody(id);
 
 Runs `code` as a function body inside a child window and returns its result. `code` may use `return` and `await` — it always runs as if inside an `async` function, so a returned Promise is resolved before the result comes back to your JS.
 
-- `id` — the id returned by `openWindow`
-- `code` — JS source, executed as the body of an `async` function in the child window
+- `id` — the id returned by `openWindow`, or `"main"` for the shell's own window
+- `code` — JS source, executed as the body of an `async` function in the target window
 - Returns: `Promise<any>` — rejects with the thrown error's message if `code` throws
 
 ```javascript

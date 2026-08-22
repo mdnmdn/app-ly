@@ -15,6 +15,10 @@ dev:
 dev-config config:
     npm run tauri dev -- --config {{config}}
 
+# Run dev with the WebDriver endpoint on (default port 4444)
+dev-webdriver port="4444":
+    npm run tauri dev -- --webdriver-port {{port}}
+
 # Build release bundle
 build:
     npm run tauri build
