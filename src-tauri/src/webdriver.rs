@@ -15,9 +15,11 @@
 
 use crate::commands::{eval_in_window, EvalState, ShellState};
 use crate::config::WebDriverConfig;
+use chrono::Local;
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -1186,6 +1188,32 @@ fn respond(request: tiny_http::Request, status: u16, body: &Value) {
     let _ = request.respond(response);
 }
 
+/// Startup notices go to stderr *and* the app's own log file. A Windows release
+/// build is linked with `windows_subsystem = "windows"` and so has no console:
+/// stderr alone would make "it is listening" — and worse, "it could not bind" —
+/// invisible on the one platform where you cannot just watch a terminal.
+fn announce(app: &AppHandle, level: &str, message: &str) {
+    eprintln!("{message}");
+
+    let Some(state) = app.try_state::<ShellState>() else {
+        return;
+    };
+    let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(state.data_root.join("logs/shell.log"))
+    else {
+        return;
+    };
+    let _ = writeln!(
+        file,
+        "{} [{}] {}",
+        Local::now().format("%Y-%m-%d %H:%M:%S"),
+        level,
+        message
+    );
+}
+
 /// Starts the endpoint on a background thread. A bind failure is reported and
 /// swallowed: the app is still usable without automation, and taking the
 /// window down over an occupied port would be worse than losing the endpoint.
@@ -1198,19 +1226,31 @@ pub fn start(app: AppHandle, app_name: String, settings: WebDriverSettings) {
     let server = match tiny_http::Server::http(&address) {
         Ok(server) => server,
         Err(error) => {
-            eprintln!("webdriver: could not listen on {address}: {error}");
+            announce(
+                &app,
+                "error",
+                &format!("webdriver: could not listen on {address}: {error}"),
+            );
             return;
         }
     };
 
     if !is_loopback(&settings.host) && settings.token.is_none() {
-        eprintln!(
-            "webdriver: WARNING — listening on {address} with no token. \
-             Anyone who can reach this port can run arbitrary JavaScript in the app."
+        announce(
+            &app,
+            "warn",
+            &format!(
+                "webdriver: WARNING — listening on {address} with no token. \
+                 Anyone who can reach this port can run arbitrary JavaScript in the app."
+            ),
         );
     }
 
-    eprintln!("webdriver: listening on http://{address} (POST /session to start)");
+    announce(
+        &app,
+        "info",
+        &format!("webdriver: listening on http://{address} (POST /session to start)"),
+    );
 
     let context = Arc::new(Context {
         app,

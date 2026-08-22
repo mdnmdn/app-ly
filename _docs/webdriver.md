@@ -67,7 +67,8 @@ npm run tauri dev -- --webdriver
 
 ### Startup behavior
 
-On success it logs to stderr:
+On success it logs to stderr and to `<dataPath>/logs/shell.log` (see
+[Platform support](#platform-support) for why both):
 
 ```
 webdriver: listening on http://127.0.0.1:4444 (POST /session to start)
@@ -79,6 +80,54 @@ without the endpoint** — a busy port never takes the window down:
 ```
 webdriver: could not listen on 127.0.0.1:4444: <os error>
 ```
+
+## Platform support
+
+macOS, Windows, and Linux — the same code on all three. Nothing in
+[`webdriver.rs`](../src-tauri/src/webdriver.rs) is `#[cfg]`-gated by OS: it is a `tiny_http`
+listener plus JS evaluated through Tauri's own IPC, and both are portable. The harness sticks to
+baseline DOM (`document.evaluate`, `getComputedStyle`, `KeyboardEvent`/`InputEvent`,
+`getClientRects`, `isConnected`) with no vendor-prefixed or engine-specific calls, so it behaves
+the same on each platform's webview.
+
+| Platform | Webview driven | Notes |
+|---|---|---|
+| macOS | WKWebView | The reason this exists — `tauri-driver` cannot drive WKWebView at all |
+| Windows | WebView2 (Chromium) | Release builds have no console; see below |
+| Linux | WebKitGTK | Works headless under `Xvfb` |
+
+### Windows: startup notices without a console
+
+`main.rs` links release builds with `windows_subsystem = "windows"`, so a released app on Windows
+has no console and anything written to stderr goes nowhere. The endpoint therefore writes its
+startup notices to the app's own log file as well — `<dataPath>/logs/shell.log`, the same file
+`shell.log()` appends to and `GET /app-ly/logs` reads:
+
+```
+2026-02-04 09:35:10 [info] webdriver: listening on http://127.0.0.1:4444 (POST /session to start)
+2026-02-04 09:35:14 [error] webdriver: could not listen on 127.0.0.1:4444: Address already in use
+```
+
+If a Windows app seems not to be listening, read that file — a bind failure is otherwise silent
+there, and it is the one platform where you cannot just watch the terminal.
+
+### Linux: headless and CI
+
+WebKitGTK needs a display, so under CI run the app inside `Xvfb` with software rendering:
+
+```bash
+Xvfb :99 -screen 0 1280x900x24 &
+export DISPLAY=:99
+export WEBKIT_DISABLE_COMPOSITING_MODE=1
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
+export LIBGL_ALWAYS_SOFTWARE=1
+
+./app-ly --webdriver-port 4444 &
+until curl -sf localhost:4444/status >/dev/null; do sleep 1; done
+```
+
+Poll `GET /status` rather than sleeping a fixed amount — the endpoint binds during app setup, but
+the window's page still has to load before the first command that touches the DOM will answer.
 
 ## Security
 
