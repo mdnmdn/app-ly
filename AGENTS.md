@@ -40,7 +40,15 @@ instructions = "Answer briefly."               # optional; default system prompt
 temperature = 0.7                              # optional; default sampling temperature
 maxTokens = 512                                # optional; default cap on response length
 toolTimeoutMs = 30000                          # optional; default 30000. Wait for a JS tool handler
+
+[webdriver]                                    # optional; absent = endpoint off
+enabled = true                                 # optional; a present [webdriver] table means on unless this is false
+host = "127.0.0.1"                             # optional; default "127.0.0.1"
+port = 4444                                    # optional; default 4444
+token = "s3cret"                               # optional; when set, requests must carry it
 ```
+
+`--webdriver`, `--webdriver-port`, `--webdriver-host`, `--webdriver-token`, and `--no-webdriver` CLI flags override the `[webdriver]` table.
 
 Omitting both `args` and `extraArgs` leaves arguments unrestricted for that program. Commands never run through a shell, and `program`/`cwd`/`env` can only come from config, never from JS.
 
@@ -73,14 +81,16 @@ Files:
 | [`src-tauri/src/auth.rs`](src-tauri/src/auth.rs) | Shared-listener authViaBrowser with concurrent flow dispatch |
 | [`src-tauri/src/keyring.rs`](src-tauri/src/keyring.rs) | OS keychain secret set/get/delete |
 | [`src-tauri/src/server.rs`](src-tauri/src/server.rs) | Embedded HTTP server and WebSocket server |
+| [`src-tauri/src/webdriver.rs`](src-tauri/src/webdriver.rs) | In-process W3C WebDriver subset (HTTP endpoint, session/element model, JS harness bridge) |
 | [`src-tauri/src/process.rs`](src-tauri/src/process.rs) | Allowlisted subprocess execution (`shell_run`, `shell_spawn`, stdin, exit/kill, runtime timeout, allowlist introspection) |
 | [`src-tauri/src/ai.rs`](src-tauri/src/ai.rs) | On-device AI (`shell.ai`): commands, tool bridge, JSON Schema translation, backend selection; backends in [`src-tauri/src/ai/`](src-tauri/src/ai/) (`backend_apple.rs` for macOS + the `ai-apple` feature, `backend_stub.rs` everywhere else) |
 | [`src-tauri/src/menu.rs`](src-tauri/src/menu.rs) | Native app menu (Reload, Open DevTools) |
 | [`src-tauri/src/lib.rs`](src-tauri/src/lib.rs) | App setup, `shell://` protocol, window creation, init script, state managers |
 
-See [`_docs/project-structure.md`](_docs/project-structure.md) for the full repo layout, and
+See [`_docs/project-structure.md`](_docs/project-structure.md) for the full repo layout,
 [`_docs/ai.md`](_docs/ai.md) for the on-device AI reference (platform requirements, reason codes,
-supported JSON Schema subset, tool bridge).
+supported JSON Schema subset, tool bridge), and [`_docs/webdriver.md`](_docs/webdriver.md) for the
+WebDriver reference.
 
 ## JS API
 

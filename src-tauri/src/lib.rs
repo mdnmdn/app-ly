@@ -8,6 +8,7 @@ mod menu;
 mod paths;
 mod process;
 mod server;
+mod webdriver;
 
 use ai::{
     shell_ai_cancel, shell_ai_generate, shell_ai_generate_object, shell_ai_info, shell_ai_stream,
@@ -24,7 +25,7 @@ use commands::{
 };
 use config::{
     config_fallback_html, default_show_dev_menu, discover_config, effective_show_dev_menu,
-    load_settings, missing_config_message, AiConfig, CommandEntry, DiscoverError,
+    load_settings, missing_config_message, AiConfig, CommandEntry, DiscoverError, WebDriverConfig,
 };
 use db::{shell_db_close, shell_db_execute, shell_db_query, DbState};
 use http::{header::CONTENT_TYPE, Response, StatusCode};
@@ -157,6 +158,7 @@ struct StartupPlan {
     settings: HashMap<String, String>,
     allowed_commands: Vec<CommandEntry>,
     ai: Option<AiConfig>,
+    webdriver: Option<WebDriverConfig>,
     config_dir: PathBuf,
 }
 
@@ -188,6 +190,7 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
                 settings: HashMap::new(),
                 allowed_commands: Vec::new(),
                 ai: None,
+                webdriver: None,
                 config_dir: PathBuf::from("."),
             });
         }
@@ -205,6 +208,7 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
                 settings: HashMap::new(),
                 allowed_commands: Vec::new(),
                 ai: None,
+                webdriver: None,
                 config_dir: PathBuf::from("."),
             });
         }
@@ -228,6 +232,7 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
                 settings: HashMap::new(),
                 allowed_commands: Vec::new(),
                 ai: None,
+                webdriver: None,
                 config_dir: PathBuf::from("."),
             });
         }
@@ -257,6 +262,7 @@ fn plan_startup(app: &tauri::App) -> Result<StartupPlan, String> {
         settings,
         allowed_commands: discovery.config.allowed_commands,
         ai: discovery.config.ai,
+        webdriver: discovery.config.webdriver,
         config_dir: discovery.config_dir,
     })
 }
@@ -332,6 +338,13 @@ pub fn run() {
 
             window_builder.build()?;
             menu::setup_app_menu(app, &plan.window_title, plan.show_dev_menu)?;
+
+            // Started last so the endpoint only ever answers once the window
+            // it drives exists. CLI flags win over the `[webdriver]` table.
+            let overrides = webdriver::parse_cli_overrides(std::env::args());
+            let wd_settings = webdriver::resolve_settings(plan.webdriver.as_ref(), &overrides);
+            webdriver::start(app.handle().clone(), plan.window_title.clone(), wd_settings);
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
