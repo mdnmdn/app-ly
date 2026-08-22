@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plugin Host Prototype</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+
+      body {
+        margin: 2rem auto;
+        max-width: 46rem;
+        line-height: 1.5;
+        padding: 0 1rem;
+      }
+
+      section {
+        margin-bottom: 1.5rem;
+      }
+
+      section h2 {
+        font-size: 1rem;
+        margin: 0 0 0.5rem;
+        color: #555;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        section h2 { color: #aaa; }
+      }
+
+      button {
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+      }
+
+      input {
+        padding: 0.25rem 0.4rem;
+        margin-right: 0.5rem;
+      }
+
+      pre {
+        padding: 1rem;
+        border-radius: 0.5rem;
+        background: rgba(127, 127, 127, 0.15);
+        overflow-x: auto;
+        max-height: 24rem;
+      }
+
+      .hint {
+        color: #777;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Plugin host prototype</h1>
+    <p class="hint">
+      Two sidecar plugins, started on demand through <code>shell.spawn</code>, talking
+      newline-delimited JSON over stdio. No Rust code knows what TLS or a trust store is.
+    </p>
+
+    <section>
+      <h2>Registry</h2>
+      <button id="discover">Discover plugins</button>
+      <button id="list">List</button>
+      <button id="stop">Stop all</button>
+    </section>
+
+    <section>
+      <h2>TLS certificates</h2>
+      <input id="host" value="example.com" size="24" />
+      <button id="inspect">Inspect chain</button>
+      <button id="expiry">Expiry</button>
+      <button id="check">Check several (streams progress)</button>
+    </section>
+
+    <section>
+      <h2>OS bridge</h2>
+      <button id="platform">Platform info</button>
+      <button id="anchors">OS trust anchors</button>
+    </section>
+
+    <section>
+      <h2>Output</h2>
+      <pre id="out">Ready.</pre>
+    </section>
+
+    <script src="./plugin-host.js"></script>
+    <script>
+      const out = document.getElementById("out");
+      const show = (label, value) => {
+        out.textContent = `${label}\n\n${
+          typeof value === "string" ? value : JSON.stringify(value, null, 2)
+        }`;
+      };
+
+      const on = (id, label, action) =>
+        document.getElementById(id).addEventListener("click", async () => {
+          out.textContent = `${label}…`;
+          try {
+            show(label, await action());
+          } catch (error) {
+            show(`${label} — failed`, String(error?.message ?? error));
+          }
+        });
+
+      const host = () => document.getElementById("host").value.trim();
+
+      const ready = async () => {
+        if (!window.plugins.list().length) {
+          await window.plugins.discover(["tls-inspect", "os-trust"]);
+        }
+      };
+
+      const use = async (name) => {
+        await ready();
+        return window.plugins.open(name);
+      };
+
+      on("discover", "Discovered", () => window.plugins.discover(["tls-inspect", "os-trust"]));
+      on("list", "Registry", async () => {
+        await ready();
+        return window.plugins.list();
+      });
+      on("stop", "Stopped", async () => {
+        await window.plugins.stopAll();
+        return window.plugins.list();
+      });
+
+      on("inspect", "Certificate chain", async () =>
+        (await use("tls")).api.inspect({ host: host() }),
+      );
+      on("expiry", "Expiry", async () => (await use("tls")).api.expiry({ host: host() }));
+      on("check", "Bulk check", async () => {
+        const tls = await use("tls");
+        const off = tls.on("progress", (data) => {
+          out.textContent = `Checking ${data.host ?? ""} (${data.done}/${data.total})…`;
+        });
+        try {
+          return await tls.call(
+            "check",
+            { hosts: [host(), "expired.badssl.com", "self-signed.badssl.com"], warnDays: 45 },
+            { timeoutMs: 60000 },
+          );
+        } finally {
+          off();
+        }
+      });
+
+      on("platform", "Platform", async () => (await use("os")).api.platform());
+      on("anchors", "Trust anchors", async () => (await use("os")).api.trustAnchors({ limit: 10 }));
+    </script>
+  </body>
+</html>

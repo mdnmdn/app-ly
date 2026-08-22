@@ -1,0 +1,10 @@
+{
+  "name": "tls",
+  "title": "TLS certificate inspector",
+  "apiVersion": 1,
+  "kind": "sidecar",
+  "command": "node",
+  "entry": "main.mjs",
+  "capabilities": ["net"],
+  "description": "Opens a TLS connection and reports the certificate chain the peer presents."
+}

@@ -101,3 +101,12 @@ app-ly/
 For the full repo layout, per-file module responsibilities, and the checklist for adding a new
 `window.shell` method, see [`project-structure.md`](project-structure.md). For on-device AI
 (`shell.ai`), see [`ai.md`](ai.md).
+
+## Runtime plugins (exploration)
+
+[`plugins.md`](plugins.md) explores how the shell could load plugins — compiled or interpreted —
+without rebuilding the binary: a survey of the candidate runtimes (sidecar process, WASM, native
+dynamic library, embedded interpreter), a proposed manifest/config/protocol design, the security
+implications, and worked examples for TLS certificates and OS APIs. It is a design document; a
+runnable prototype that needs no Rust changes lives in
+[`example/plugins/`](../example/plugins/).

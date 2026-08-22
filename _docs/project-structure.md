@@ -13,6 +13,9 @@ app-ly/
 ├── example/
 │   ├── contents/index.html  # sample HTML app demoing window.shell
 │   ├── icon.png
+│   ├── plugins/              # prototype of the runtime plugin system explored in
+│   │                          # _docs/plugins.md — sidecar plugins driven from the webview
+│   │                          # via shell.spawn; no part of the shell binary
 │   └── data/                 # dataPath for the example app (created at runtime)
 ├── src/                      # unused Tauri template frontend — required by tauri.conf.json's
 │                              # `frontendDist`, but never actually loaded (contents are served
@@ -91,4 +94,5 @@ at runtime:
 Then document it in [`js-api.md`](js-api.md) (full reference) and
 [`app-agent-guide.md`](app-agent-guide.md) (short example next to each API) for anyone
 building an app against the shell. The on-device AI surface has its own deep reference in
-[`ai.md`](ai.md).
+[`ai.md`](ai.md). For extending the shell *without* touching it — runtime plugins — see the
+exploration in [`plugins.md`](plugins.md).

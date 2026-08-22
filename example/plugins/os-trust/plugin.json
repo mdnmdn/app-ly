@@ -1,0 +1,10 @@
+{
+  "name": "os",
+  "title": "OS bridge (machine info + trust store)",
+  "apiVersion": 1,
+  "kind": "sidecar",
+  "command": "node",
+  "entry": "main.mjs",
+  "capabilities": ["fs:read", "run"],
+  "description": "Reads OS-level facts and the platform trust store, using OS APIs, CLI tools and the filesystem."
+}

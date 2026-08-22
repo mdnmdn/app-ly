@@ -1,0 +1,21 @@
+# Runnable config for the plugin-host prototype:
+#
+#   npm run tauri dev -- --config ./example/plugins/app.toml
+#
+# `contents` is this folder, so the manifests and sidecar sources are served
+# over shell:// alongside the demo page. A Rust-side host would read them from
+# disk instead and plugins would not have to live in the UI tree.
+icon = "../icon.png"
+name = "Plugin Host Prototype"
+contents = "."
+dataPath = "data"
+
+# The one grant that makes runtime plugins possible: the shell may start node
+# on a .mjs file below this folder. Everything a plugin does, it does with this
+# process's privileges — see the security section of _docs/plugins.md.
+[[allowedCommands]]
+name = "node"
+program = "node"
+args = ["^[\\w.-]+/[\\w.-]+\\.mjs$"]
+extraArgs = "^[\\w./=:-]+$"
+maxArgs = 8

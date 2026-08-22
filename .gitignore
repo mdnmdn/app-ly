@@ -25,3 +25,4 @@ dist-ssr
 
 example/data/
 .env
+example/plugins/data/
