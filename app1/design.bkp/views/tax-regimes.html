@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tax Regimes — FiscoDesk</title>
+  <link rel="stylesheet" href="../css/common.css" />
+</head>
+<body class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand"><div class="sidebar-logo">FD</div><div><div class="sidebar-title">FiscoDesk</div><div class="sidebar-sub">Invoice & Tax</div></div></div>
+    <div class="nav-section">Main</div>
+    <ul class="nav-list">
+      <li><a class="nav-link" href="dashboard.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="10" y="2" width="6" height="6" rx="1"/><rect x="2" y="10" width="6" height="6" rx="1"/><rect x="10" y="10" width="6" height="6" rx="1"/></svg>Dashboard</a></li>
+      <li><a class="nav-link" href="invoices.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2h10l2 2v12H4V2z"/><path d="M6 6h6M6 9h6M6 12h4"/></svg>Invoices</a></li>
+      <li><a class="nav-link" href="customers.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="6" r="3"/><path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>Customers</a></li>
+    </ul>
+    <div class="nav-section">Tax</div>
+    <ul class="nav-list">
+      <li><a class="nav-link active" href="tax-regimes.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h12M3 8h12M3 12h8"/></svg>Tax Regimes</a></li>
+      <li><a class="nav-link" href="fiscal-years.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="12" height="11" rx="1"/><path d="M3 8h12M6 2v4M12 2v4"/></svg>Fiscal Years</a></li>
+      <li><a class="nav-link" href="tax-appointments.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="12" height="11" rx="1"/><path d="M3 8h12M7 11h2M11 11h2"/></svg>Tax Appointments</a></li>
+      <li><a class="nav-link" href="payments.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 6h14v8H2z"/><path d="M2 9h14M5 12h4"/></svg>Payments</a></li>
+      <li><a class="nav-link disabled" href="reports.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 14V8M7 14V4M11 14V10M15 14V6"/></svg>Reports</a></li>
+    </ul>
+  </aside>
+
+  <header class="topbar">
+    <div class="topbar-left"><h1>Tax Regimes</h1></div>
+    <div class="topbar-right">
+      <button class="btn btn-ghost btn-icon" data-theme-toggle title="Toggle theme"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12a5 5 0 010-10 5 5 0 000 10z"/></svg></button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="toolbar">
+      <p class="text-muted text-sm">Define tax calculation parameters for each regime</p>
+      <div class="toolbar-spacer"></div>
+      <button class="btn btn-sm">Export CSV</button>
+      <button class="btn btn-sm">Export PDF</button>
+      <button class="btn btn-primary" data-inline-new="regimes-table">New Tax Regime</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table" id="regimes-table" data-inline-table>
+        <thead>
+          <tr>
+            <th data-field="name" class="col-required">Name</th>
+            <th data-field="textId" class="col-required" data-type="mono">Text ID</th>
+            <th data-field="tax" class="col-required num" data-type="pct">% Tax</th>
+            <th data-field="inarcassa" class="col-required num" data-type="pct">% Inarcassa</th>
+            <th data-field="vat" class="num" data-type="pct">% VAT</th>
+            <th data-field="topup" class="num" data-type="pct">% Top-up</th>
+            <th data-field="actions"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-field="name" data-value="Forfettario 2025"><strong>Forfettario 2025</strong></td>
+            <td data-field="textId" data-value="FORF-25" class="text-mono">FORF-25</td>
+            <td data-field="tax" data-value="15" class="num" data-pct="15">—</td>
+            <td data-field="inarcassa" data-value="26.23" class="num" data-pct="26.23">—</td>
+            <td data-field="vat" data-value="0" class="num" data-pct="0">—</td>
+            <td data-field="topup" data-value="2" class="num" data-pct="2">—</td>
+            <td class="actions" data-field="actions">
+              <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button><button type="button" class="btn btn-sm btn-danger" data-confirm="Delete regime Forfettario 2025?">Delete</button></span>
+              <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+            </td>
+          </tr>
+          <tr>
+            <td data-field="name" data-value="Ordinario 2025"><strong>Ordinario 2025</strong></td>
+            <td data-field="textId" data-value="ORD-25" class="text-mono">ORD-25</td>
+            <td data-field="tax" data-value="24" class="num" data-pct="24">—</td>
+            <td data-field="inarcassa" data-value="26.23" class="num" data-pct="26.23">—</td>
+            <td data-field="vat" data-value="22" class="num" data-pct="22">—</td>
+            <td data-field="topup" data-value="0" class="num" data-pct="0">—</td>
+            <td class="actions" data-field="actions">
+              <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button><button type="button" class="btn btn-sm btn-danger" data-confirm="Delete?">Delete</button></span>
+              <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+            </td>
+          </tr>
+          <tr>
+            <td data-field="name" data-value="Forfettario 2024"><strong>Forfettario 2024</strong></td>
+            <td data-field="textId" data-value="FORF-24" class="text-mono">FORF-24</td>
+            <td data-field="tax" data-value="15" class="num" data-pct="15">—</td>
+            <td data-field="inarcassa" data-value="26.07" class="num" data-pct="26.07">—</td>
+            <td data-field="vat" data-value="0" class="num" data-pct="0">—</td>
+            <td data-field="topup" data-value="2" class="num" data-pct="2">—</td>
+            <td class="actions" data-field="actions">
+              <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button><button type="button" class="btn btn-sm btn-danger" data-confirm="Delete?">Delete</button></span>
+              <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="../js/app.js"></script>
+</body>
+</html>

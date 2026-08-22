@@ -315,6 +315,134 @@ impl AiState {
             None => Ok(()),
         }
     }
+
+    pub fn info(&self) -> AiInfo {
+        match self.availability() {
+            Some(unavailable) => AiInfo {
+                available: false,
+                reason: Some(unavailable.reason.to_string()),
+                detail: unavailable.detail,
+                models: Vec::new(),
+                features: AiFeatures {
+                    text: false,
+                    structured: false,
+                    tools: false,
+                    streaming: false,
+                },
+            },
+            None => AiInfo {
+                available: true,
+                reason: None,
+                detail: None,
+                models: vec![AiModel {
+                    id: DEFAULT_MODEL_ID.to_string(),
+                    name: self.backend.model_label().to_string(),
+                    default: true,
+                }],
+                features: self.backend.features(),
+            },
+        }
+    }
+
+    /// One-shot text. `dispatch` is the CLI tool bridge (allowlisted
+    /// programs); `None` rejects every tool call.
+    pub fn generate_sync(
+        &self,
+        prompt: String,
+        options: AiOptions,
+        dispatch: Option<ToolDispatch>,
+    ) -> Result<AiResult, String> {
+        self.require_available()?;
+        let model = resolve_model(options.model.as_deref())?;
+        let (dispatch, records) = recording_dispatch(dispatch.unwrap_or_else(noop_dispatch));
+        let request = build_request(&self.settings, prompt, options, None, dispatch);
+        let text = self.backend.generate(request)?;
+        Ok(AiResult {
+            text,
+            model,
+            tool_calls: take_records(&records),
+        })
+    }
+
+    pub fn generate_object_sync(
+        &self,
+        prompt: String,
+        schema: Value,
+        options: AiOptions,
+        dispatch: Option<ToolDispatch>,
+    ) -> Result<AiObjectResult, String> {
+        self.require_available()?;
+        let model = resolve_model(options.model.as_deref())?;
+        let translated = translate_schema(&schema, "Root")?;
+        let schema_json = serde_json::to_string(&json!({
+            "root": translated,
+            "dependencies": [],
+        }))
+        .map_err(|e| format!("encode schema: {e}"))?;
+        let (dispatch, records) = recording_dispatch(dispatch.unwrap_or_else(noop_dispatch));
+        let request = build_request(&self.settings, prompt, options, Some(schema_json), dispatch);
+        let raw = self.backend.generate_object(request)?;
+        let object = serde_json::from_str::<Value>(&raw)
+            .map_err(|e| format!("model returned invalid JSON: {e}"))?;
+        Ok(AiObjectResult {
+            object,
+            model,
+            tool_calls: take_records(&records),
+        })
+    }
+
+    pub fn stream_sync(
+        &self,
+        prompt: String,
+        options: AiOptions,
+        sink: Box<dyn FnMut(&str) + Send + 'static>,
+        dispatch: Option<ToolDispatch>,
+    ) -> Result<AiResult, String> {
+        self.require_available()?;
+        let model = resolve_model(options.model.as_deref())?;
+        let (dispatch, records) = recording_dispatch(dispatch.unwrap_or_else(noop_dispatch));
+        let request = build_request(&self.settings, prompt, options, None, dispatch);
+        let text = self.backend.stream(request, sink)?;
+        Ok(AiResult {
+            text,
+            model,
+            tool_calls: take_records(&records),
+        })
+    }
+}
+
+/// Tool calls have nowhere to go without a webview or a CLI dispatch.
+/// The model sees a structured error and can keep generating.
+fn noop_dispatch() -> ToolDispatch {
+    Arc::new(
+        |name: &str, _arguments: Value| json!({ "error": format!("tool \"{name}\" is not available from the CLI") }),
+    )
+}
+
+fn recording_dispatch(inner: ToolDispatch) -> (ToolDispatch, Arc<Mutex<Vec<ToolCallRecord>>>) {
+    let records = Arc::new(Mutex::new(Vec::new()));
+    let rec = records.clone();
+    let dispatch = Arc::new(move |name: &str, arguments: Value| -> Value {
+        let value = inner(name, arguments.clone());
+        let error = value
+            .as_object()
+            .filter(|object| object.len() == 1)
+            .and_then(|object| object.get("error"))
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        rec.lock().unwrap().push(ToolCallRecord {
+            name: name.to_string(),
+            arguments,
+            result: if error.is_some() {
+                None
+            } else {
+                Some(value.clone())
+            },
+            error,
+        });
+        value
+    });
+    (dispatch, records)
 }
 
 static CALL_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -708,31 +836,7 @@ fn take_records(records: &Arc<Mutex<Vec<ToolCallRecord>>>) -> Vec<ToolCallRecord
 
 #[tauri::command(rename_all = "camelCase")]
 pub fn shell_ai_info(state: State<'_, AiState>) -> AiInfo {
-    match state.availability() {
-        Some(unavailable) => AiInfo {
-            available: false,
-            reason: Some(unavailable.reason.to_string()),
-            detail: unavailable.detail,
-            models: Vec::new(),
-            features: AiFeatures {
-                text: false,
-                structured: false,
-                tools: false,
-                streaming: false,
-            },
-        },
-        None => AiInfo {
-            available: true,
-            reason: None,
-            detail: None,
-            models: vec![AiModel {
-                id: DEFAULT_MODEL_ID.to_string(),
-                name: state.backend.model_label().to_string(),
-                default: true,
-            }],
-            features: state.backend.features(),
-        },
-    }
+    state.info()
 }
 
 #[tauri::command(rename_all = "camelCase")]

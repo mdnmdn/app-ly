@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FiscoDesk — Storyboard</title>
+  <link rel="stylesheet" href="css/common.css" />
+  <style>
+    /* Live iframe previews inside .screen-preview (180px-tall frame, from common.css).
+       Render each view at a real desktop size, then scale it down to fit the
+       frame's inner box, so the preview can never drift from the real page. */
+    .screen-preview-frame {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .screen-preview-frame iframe {
+      width: 1280px;
+      height: 800px;
+      border: 0;
+      /* 180px frame height / 800px real height */
+      transform: scale(0.225);
+      transform-origin: top left;
+    }
+  </style>
+</head>
+<body>
+  <div class="storyboard" id="app">
+    <header class="storyboard-header">
+      <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:16px">
+        <div>
+          <h1>FiscoDesk</h1>
+          <p class="text-muted">Italian freelancer invoice & tax management — desktop Tauri inner UI prototype</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="badge badge-open">{{ SCREENS.length }} screens</span>
+          <button class="btn btn-ghost btn-sm" data-theme-toggle title="Toggle theme">Theme</button>
+          <a class="btn btn-ghost btn-sm" href="storybook.html">Storybook</a>
+          <a class="btn btn-primary btn-sm" href="views/dashboard.html">Open app →</a>
+        </div>
+      </div>
+      <p class="text-sm text-muted" style="margin-top:12px">English UI · Italian locale (€) · Light/dark · 3 color themes · Shared <code class="text-mono">css/common.css</code></p>
+    </header>
+
+    <section class="screen-grid">
+      <a class="screen-card" v-for="s in SCREENS" :key="s.slug" :href="href(s)">
+        <div class="screen-preview">
+          <div class="screen-preview-frame">
+            <iframe :src="href(s)" tabindex="-1" loading="lazy"></iframe>
+          </div>
+        </div>
+        <div class="screen-card-body">
+          <h3>{{ s.title }}</h3>
+          <p class="text-sm text-muted">{{ s.desc }}</p>
+          <div class="screen-card-meta" v-if="s.badges.length || !s.migrated">
+            <span class="badge badge-current" v-for="b in s.badges" :key="b">{{ b }}</span>
+            <span class="badge badge-excluded" v-if="!s.migrated">Legacy</span>
+          </div>
+        </div>
+      </a>
+    </section>
+  </div>
+
+  <script src="vendor/vue.global.js"></script>
+  <script src="js/theme.js"></script>
+  <script type="module">
+    const { createApp } = Vue;
+    createApp({
+      data() {
+        return {
+          SCREENS: [
+            {
+              slug: 'dashboard',
+              title: 'Dashboard',
+              desc: 'Stats, charts, upcoming appointments, payment alerts, quick-action FABs',
+              badges: ['Home', 'Charts'],
+              migrated: true,
+            },
+            {
+              slug: 'invoices',
+              title: 'Invoices',
+              desc: 'Filterable table, status badges, paid %, inline edit, keyboard N',
+              badges: ['Main view'],
+              migrated: true,
+            },
+            {
+              slug: 'customers',
+              title: 'Customers',
+              desc: 'CRM-style list with invoice counts and FY totals, inline create/edit',
+              badges: [],
+              migrated: true,
+            },
+            {
+              slug: 'tax-regimes',
+              title: 'Tax Regimes',
+              desc: 'Forfettario / ordinario parameters — tax, inarcassa, VAT, top-up %',
+              badges: [],
+              migrated: true,
+            },
+            {
+              slug: 'fiscal-years',
+              title: 'Fiscal Years',
+              desc: 'Year cards with regime, totals, appointments — links to invoices & deadlines',
+              badges: [],
+              migrated: true,
+            },
+            {
+              slug: 'tax-appointments',
+              title: 'Tax Appointments',
+              desc: 'Calendar + list scoped by fiscal year, mark-as-paid, next-FY planning',
+              badges: [],
+              migrated: true,
+            },
+            {
+              slug: 'payments',
+              title: 'Payments',
+              desc: 'Inbound / outbound tabs, unified register, partial payment support',
+              badges: [],
+              migrated: true,
+            },
+            {
+              slug: 'reports',
+              title: 'Reports',
+              desc: 'Future placeholder — per-view CSV/PDF export available now',
+              badges: ['Coming soon'],
+              migrated: true,
+            },
+            {
+              slug: 'ai-lab',
+              title: 'AI Lab',
+              desc: 'Ad-hoc test page for shell.ai — generate, generateObject, stream, tools',
+              badges: ['Test'],
+              migrated: true,
+            },
+          ],
+        };
+      },
+      methods: {
+        href(s) {
+          return s.migrated ? 'views/' + s.slug + '.html' : '_original/views/' + s.slug + '.html';
+        },
+      },
+    }).mount('#app');
+  </script>
+</body>
+</html>

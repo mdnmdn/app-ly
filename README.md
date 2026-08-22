@@ -34,7 +34,14 @@ dataPath = "data"
 ```
 
 Launch `app-ly.app` (or the executable) sitting next to `app.toml` — it's auto-discovered,
-no flags needed. Full walkthrough and `window.shell` reference:
+no flags needed. The same binary also has a headless CLI (`ai`, `db`, `file`, `fetch`, `run`,
+`info`) that does not open a window:
+
+```bash
+app-ly.app/Contents/MacOS/app-ly ai "say hi"
+```
+
+Full walkthrough and `window.shell` reference:
 [`_docs/app-agent-guide.md`](_docs/app-agent-guide.md).
 
 ## Working on the shell itself

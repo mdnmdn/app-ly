@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Invoices — FiscoDesk</title>
+  <link rel="stylesheet" href="../css/common.css" />
+  <style>#app { display: contents; }</style>
+</head>
+<body class="app-shell">
+  <div id="app">
+    <app-shell page="invoices" title="Invoices">
+      <template #topbar-right>
+        <select class="select select-sm"><option>FY 2025</option><option>FY 2024</option></select>
+        <button class="btn btn-ghost btn-icon" data-theme-toggle title="Toggle theme"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12a5 5 0 010-10 5 5 0 000 10z"/></svg></button>
+      </template>
+
+      <div class="toolbar">
+        <select class="select select-sm"><option>All statuses</option><option>Confirmed</option><option>Planned</option><option>Excluded</option></select>
+        <select class="select select-sm"><option>All customers</option><option>Studio Rossi</option><option>TechLab Srl</option><option>Freelance Co</option></select>
+        <input class="input input-sm search-input" type="search" placeholder="Search number or description…" />
+        <div class="toolbar-spacer"></div>
+        <button class="btn btn-sm">Export CSV</button>
+        <button class="btn btn-sm">Export PDF</button>
+        <button class="btn btn-primary" data-shortcut-n @click="addInvoice">New Invoice <kbd style="font-size:0.65rem;opacity:0.7">N</kbd></button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="col-required">Invoice #</th>
+              <th class="col-required">Customer</th>
+              <th class="col-required">Description</th>
+              <th class="col-required">Status</th>
+              <th class="col-required">Invoice Date</th>
+              <th>Expected Payment</th>
+              <th class="col-required num">Taxable</th>
+              <th class="num">Top-up</th>
+              <th class="num">VAT</th>
+              <th class="num">Gross</th>
+              <th>Paid</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="inv in invoices" :key="inv.number">
+              <td class="text-mono">
+                <template v-if="editing === inv.number">
+                  <input class="input input-sm" v-model="inv.number" />
+                </template>
+                <template v-else>{{ inv.number }}</template>
+              </td>
+              <td>
+                <template v-if="editing === inv.number">
+                  <select class="select select-sm" v-model="inv.customer">
+                    <option>TechLab Srl</option>
+                    <option>Studio Rossi</option>
+                    <option>Freelance Co</option>
+                    <option>Acme Consulting</option>
+                  </select>
+                </template>
+                <template v-else>{{ inv.customer }}</template>
+              </td>
+              <td>
+                <template v-if="editing === inv.number">
+                  <input class="input input-sm" v-model="inv.description" />
+                </template>
+                <template v-else>{{ inv.description }}</template>
+              </td>
+              <td>
+                <template v-if="editing === inv.number">
+                  <select class="select select-sm" v-model="inv.status">
+                    <option>Confirmed</option>
+                    <option>Planned</option>
+                    <option>Excluded</option>
+                  </select>
+                </template>
+                <template v-else><span :class="'badge badge-' + inv.status.toLowerCase()">{{ inv.status }}</span></template>
+              </td>
+              <td>
+                <template v-if="editing === inv.number">
+                  <input class="input input-sm" type="date" v-model="inv.invoiceDate" />
+                </template>
+                <template v-else>{{ inv.invoiceDate }}</template>
+              </td>
+              <td>
+                <template v-if="editing === inv.number">
+                  <input class="input input-sm" type="date" v-model="inv.paymentDate" />
+                </template>
+                <template v-else>{{ inv.paymentDate || '—' }}</template>
+              </td>
+              <td class="num">
+                <template v-if="editing === inv.number">
+                  <input class="input input-sm" type="number" v-model.number="inv.taxable" />
+                </template>
+                <template v-else>{{ formatEUR(inv.taxable) }}</template>
+              </td>
+              <td class="num">{{ formatEUR(inv.topup) }}</td>
+              <td class="num">{{ formatEUR(inv.vat) }}</td>
+              <td class="num">{{ formatEUR(inv.gross) }}</td>
+              <td>
+                <template v-if="inv.status === 'Excluded'">
+                  <div class="progress-label">Excluded</div>
+                </template>
+                <template v-else-if="inv.status === 'Planned'">
+                  <div class="progress-label">—</div>
+                  <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+                </template>
+                <template v-else>
+                  <div class="progress-label" :style="inv.paidPct === 0 ? 'color:var(--danger)' : ''">{{ inv.paidPct === 0 ? 'Unpaid' : formatPct(inv.paidPct) }}</div>
+                  <div class="progress-bar"><div class="progress-fill" :style="'width:' + inv.paidPct + '%' + (inv.paidPct === 0 ? ';background:var(--danger)' : '')"></div></div>
+                </template>
+              </td>
+              <td class="actions">
+                <template v-if="editing === inv.number">
+                  <button type="button" class="btn btn-sm btn-primary" @click="editing = null">Save</button>
+                  <button type="button" class="btn btn-sm" @click="editing = null">Cancel</button>
+                </template>
+                <template v-else>
+                  <button type="button" class="btn btn-sm btn-ghost" @click="editing = inv.number">Edit</button>
+                  <button type="button" class="btn btn-sm btn-ghost" v-if="inv.status !== 'Excluded'" @click="payInvoice(inv.number)">Pay</button>
+                  <button type="button" class="btn btn-sm btn-danger" @click="removeInvoice(inv.number)">Del</button>
+                </template>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </app-shell>
+  </div>
+
+  <script src="../vendor/vue.global.js"></script>
+  <script src="../js/theme.js"></script>
+  <script type="module">
+    import { AppShell } from '../js/components/app-shell.js';
+    const { createApp } = Vue;
+    createApp({
+      components: { AppShell },
+      data() {
+        return {
+          editing: null,
+          nextNew: 1,
+          invoices: [
+            { number: 'INV-2025-014', customer: 'TechLab Srl', description: 'API integration Q2', status: 'Confirmed', invoiceDate: '2025-06-12', paymentDate: '2025-07-12', taxable: 4200, topup: 84, vat: 0, gross: 4284, paidPct: 0 },
+            { number: 'INV-2025-011', customer: 'TechLab Srl', description: 'Consulting March', status: 'Confirmed', invoiceDate: '2025-03-28', paymentDate: '2025-06-28', taxable: 2200, topup: 44, vat: 0, gross: 2244, paidPct: 70 },
+            { number: 'INV-2025-008', customer: 'Studio Rossi', description: 'Brand identity', status: 'Confirmed', invoiceDate: '2025-02-15', paymentDate: '2025-05-15', taxable: 3500, topup: 70, vat: 0, gross: 3570, paidPct: 0 },
+            { number: 'INV-2025-015', customer: 'Freelance Co', description: 'Workshop facilitation', status: 'Planned', invoiceDate: '2025-07-01', paymentDate: '2025-07-31', taxable: 1800, topup: 36, vat: 0, gross: 1836, paidPct: 0 },
+            { number: 'INV-2025-003', customer: 'Studio Rossi', description: 'Retainer Jan (excluded)', status: 'Excluded', invoiceDate: '2025-01-10', paymentDate: '', taxable: 1200, topup: 0, vat: 0, gross: 1200, paidPct: 0 },
+          ],
+        };
+      },
+      methods: {
+        formatEUR: window.FiscoDesk.formatEUR,
+        formatPct: window.FiscoDesk.formatPct,
+        addInvoice() {
+          const number = 'NEW-' + this.nextNew++;
+          this.invoices.unshift({
+            number, customer: 'TechLab Srl', description: '', status: 'Planned',
+            invoiceDate: '', paymentDate: '', taxable: 0, topup: 0, vat: 0, gross: 0, paidPct: 0,
+          });
+          this.editing = number;
+        },
+        payInvoice(number) {
+          const inv = this.invoices.find((i) => i.number === number);
+          if (inv) inv.paidPct = 100;
+        },
+        removeInvoice(number) {
+          if (confirm('Delete invoice ' + number + '?')) {
+            this.invoices = this.invoices.filter((i) => i.number !== number);
+          }
+        },
+      },
+    }).mount('#app');
+  </script>
+</body>
+</html>

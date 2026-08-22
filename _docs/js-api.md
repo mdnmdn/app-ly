@@ -646,7 +646,7 @@ The promise rejects only on **policy or spawn** failures. A program that runs an
 
 | Situation | Outcome |
 |-----------|---------|
-| No `[[allowedCommands]]` entry with that `name` | **Rejects** — `no allowed command named "curl" — add an [[allowedCommands]] entry to app.toml` |
+| No `[[allowedCommands]]` entry with that `name` | **Rejects** — `no allowed command named "curl" — this app.toml has no [[allowedCommands]]` (or lists the names that are allowed) |
 | An argument fails its pattern, or `maxArgs` is exceeded | **Rejects** |
 | Invalid regex in that entry's config | **Rejects** |
 | Executable not found / cannot be spawned | **Rejects** |

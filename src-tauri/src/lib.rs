@@ -1,5 +1,6 @@
 mod ai;
 mod auth;
+mod cli;
 mod commands;
 mod config;
 mod db;
@@ -277,6 +278,12 @@ fn default_inner_size(app: &tauri::App) -> (f64, f64) {
 
 fn create_builder() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
+}
+
+/// If argv is a recognised CLI command, run it headless and return an exit
+/// code. `None` means launch the desktop app.
+pub fn maybe_run_cli() -> Option<i32> {
+    cli::maybe_run()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

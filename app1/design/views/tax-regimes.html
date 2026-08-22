@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tax Regimes — FiscoDesk</title>
+  <link rel="stylesheet" href="../css/common.css" />
+  <style>#app { display: contents; }</style>
+</head>
+<body class="app-shell">
+  <div id="app">
+    <app-shell page="tax-regimes" title="Tax Regimes">
+      <template #topbar-right>
+        <button class="btn btn-ghost btn-icon" data-theme-toggle title="Toggle theme"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12a5 5 0 010-10 5 5 0 000 10z"/></svg></button>
+      </template>
+
+      <div class="toolbar">
+        <p class="text-muted text-sm">Define tax calculation parameters for each regime</p>
+        <div class="toolbar-spacer"></div>
+        <button class="btn btn-sm">Export CSV</button>
+        <button class="btn btn-sm">Export PDF</button>
+        <button class="btn btn-primary" @click="addRegime">New Tax Regime</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="col-required">Name</th>
+              <th class="col-required">Text ID</th>
+              <th class="col-required num">% Tax</th>
+              <th class="col-required num">% Inarcassa</th>
+              <th class="num">% VAT</th>
+              <th class="num">% Top-up</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in regimes" :key="r.textId">
+              <template v-if="editing === r.textId">
+                <td><input class="input input-sm" v-model="r.name" /></td>
+                <td><input class="input input-sm text-mono" v-model="r.textId" /></td>
+                <td class="num"><input class="input input-sm" type="number" step="0.01" v-model.number="r.tax" /></td>
+                <td class="num"><input class="input input-sm" type="number" step="0.01" v-model.number="r.inarcassa" /></td>
+                <td class="num"><input class="input input-sm" type="number" step="0.01" v-model.number="r.vat" /></td>
+                <td class="num"><input class="input input-sm" type="number" step="0.01" v-model.number="r.topup" /></td>
+                <td class="actions">
+                  <button type="button" class="btn btn-sm btn-primary" @click="editing = null">Save</button>
+                  <button type="button" class="btn btn-sm" @click="editing = null">Cancel</button>
+                </td>
+              </template>
+              <template v-else>
+                <td><strong>{{ r.name }}</strong></td>
+                <td class="text-mono">{{ r.textId }}</td>
+                <td class="num">{{ formatPct(r.tax) }}</td>
+                <td class="num">{{ formatPct(r.inarcassa) }}</td>
+                <td class="num">{{ formatPct(r.vat) }}</td>
+                <td class="num">{{ formatPct(r.topup) }}</td>
+                <td class="actions">
+                  <button type="button" class="btn btn-sm btn-ghost" @click="editing = r.textId">Edit</button>
+                  <button type="button" class="btn btn-sm btn-danger" @click="removeRegime(r.textId)">Delete</button>
+                </td>
+              </template>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </app-shell>
+  </div>
+
+  <script src="../vendor/vue.global.js"></script>
+  <script src="../js/theme.js"></script>
+  <script type="module">
+    import { AppShell } from '../js/components/app-shell.js';
+    const { createApp } = Vue;
+    createApp({
+      components: { AppShell },
+      data() {
+        return {
+          editing: null,
+          regimes: [
+            { name: 'Forfettario 2025', textId: 'FORF-25', tax: 15, inarcassa: 26.23, vat: 0, topup: 2 },
+            { name: 'Ordinario 2025', textId: 'ORD-25', tax: 24, inarcassa: 26.23, vat: 22, topup: 0 },
+            { name: 'Forfettario 2024', textId: 'FORF-24', tax: 15, inarcassa: 26.07, vat: 0, topup: 2 },
+          ],
+        };
+      },
+      methods: {
+        formatPct: window.FiscoDesk.formatPct,
+        addRegime() {
+          const draft = { name: '', textId: 'REG-NEW', tax: 0, inarcassa: 0, vat: 0, topup: 0 };
+          this.regimes.unshift(draft);
+          this.editing = draft.textId;
+        },
+        removeRegime(textId) {
+          const r = this.regimes.find((x) => x.textId === textId);
+          if (confirm('Delete regime ' + r.name + '?')) {
+            this.regimes = this.regimes.filter((x) => x.textId !== textId);
+          }
+        },
+      },
+    }).mount('#app');
+  </script>
+</body>
+</html>

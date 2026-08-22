@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Lab — FiscoDesk</title>
+  <link rel="stylesheet" href="../css/common.css" />
+  <style>
+    .ai-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+    .ai-out {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 64px;
+      max-height: 340px;
+      overflow: auto;
+      margin-top: 10px;
+    }
+    .ai-out.error {
+      color: var(--danger);
+      border-color: var(--danger-muted);
+      background: var(--danger-muted);
+    }
+    .ai-out.placeholder {
+      color: var(--muted);
+      opacity: 0.6;
+    }
+    .ai-out.slim { min-height: 0; max-height: 220px; margin-top: 0; }
+    .ai-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .ai-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 0.8125rem;
+    }
+    .status-detail { margin-top: 8px; }
+    .tool-call {
+      margin-top: 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 10px;
+      font-size: 0.75rem;
+      background: var(--surface);
+    }
+    .tool-call-name { font-weight: 600; }
+    .btn[disabled] { opacity: 0.45; pointer-events: none; }
+    @media (max-width: 1100px) {
+      .ai-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-logo">FD</div>
+      <div>
+        <div class="sidebar-title">FiscoDesk</div>
+        <div class="sidebar-sub">Invoice &amp; Tax</div>
+      </div>
+    </div>
+    <div class="nav-section">Main</div>
+    <ul class="nav-list">
+      <li><a class="nav-link" href="dashboard.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="10" y="2" width="6" height="6" rx="1"/><rect x="2" y="10" width="6" height="6" rx="1"/><rect x="10" y="10" width="6" height="6" rx="1"/></svg>Dashboard</a></li>
+      <li><a class="nav-link" href="invoices.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2h10l2 2v12H4V2z"/><path d="M6 6h6M6 9h6M6 12h4"/></svg>Invoices</a></li>
+      <li><a class="nav-link" href="customers.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="6" r="3"/><path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>Customers</a></li>
+      <li><a class="nav-link active" href="ai-lab.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 2l1.6 4.4L15 8l-4.4 1.6L9 14l-1.6-4.4L3 8l4.4-1.6L9 2z"/><path d="M14 12l.7 1.8L16.5 14.5l-1.8.7L14 17l-.7-1.8-1.8-.7 1.8-.7L14 12z"/></svg>AI Lab</a></li>
+    </ul>
+    <div class="nav-section">Tax</div>
+    <ul class="nav-list">
+      <li><a class="nav-link" href="tax-regimes.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h12M3 8h12M3 12h8"/></svg>Tax Regimes</a></li>
+      <li><a class="nav-link" href="fiscal-years.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="12" height="11" rx="1"/><path d="M3 8h12M6 2v4M12 2v4"/></svg>Fiscal Years</a></li>
+      <li><a class="nav-link" href="tax-appointments.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="12" height="11" rx="1"/><path d="M3 8h12M7 11h2M11 11h2"/></svg>Tax Appointments</a></li>
+      <li><a class="nav-link" href="payments.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 6h14v8H2z"/><path d="M2 9h14M5 12h4"/></svg>Payments</a></li>
+      <li><a class="nav-link disabled" href="reports.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 14V8M7 14V4M11 14V10M15 14V6"/></svg>Reports</a></li>
+    </ul>
+  </aside>
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1>AI Lab</h1>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-ghost btn-icon" data-theme-toggle aria-pressed="false" title="Toggle theme">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12a5 5 0 010-10 5 5 0 000 10z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="main">
+    <section class="card">
+      <div class="card-header">
+        <h3>On-device model status</h3>
+        <button class="btn btn-sm btn-ghost" id="refresh-status">Refresh</button>
+      </div>
+      <div class="card-body">
+        <div class="status-row" id="status-line"><span class="badge badge-excluded">Checking…</span></div>
+        <div class="status-detail text-sm text-muted" id="status-detail">Querying shell.ai.info()…</div>
+      </div>
+    </section>
+
+    <section class="ai-grid">
+      <div class="card">
+        <div class="card-header"><h3>Generate</h3><span class="badge badge-current">one-shot text</span></div>
+        <div class="card-body">
+          <div class="field">
+            <label for="gen-prompt">Prompt</label>
+            <textarea class="textarea" id="gen-prompt">Summarise this note in one line: I invoiced TechLab Srl 3,500 EUR plus 22% VAT in June, then spent 200 EUR on hosting and 340 on Adobe. 70% of the invoice is already paid.</textarea>
+          </div>
+          <div class="form-grid" style="margin-top:10px">
+            <div class="field"><label for="gen-instr">Instructions</label><input class="input" id="gen-instr" value="Answer briefly and in plain text." /></div>
+            <div class="field"><label for="gen-tokens">Max tokens</label><input class="input" id="gen-tokens" type="number" min="1" value="200" /></div>
+          </div>
+          <div class="ai-actions">
+            <button class="btn btn-primary" id="gen-run" data-ai-action>Generate</button>
+            <span class="text-sm text-muted" id="gen-elapsed"></span>
+          </div>
+          <pre class="ai-out placeholder" id="gen-out">Result appears here.</pre>
+          <div class="ai-meta" id="gen-meta"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>GenerateObject</h3><span class="badge badge-current">structured output</span></div>
+        <div class="card-body">
+          <div class="field">
+            <label for="obj-schema">Schema preset</label>
+            <select class="select" id="obj-schema">
+              <option value="tagger">Invoice tagger</option>
+              <option value="summary">Appointment summary</option>
+            </select>
+          </div>
+          <div class="field" style="margin-top:10px">
+            <label for="obj-prompt">Prompt</label>
+            <textarea class="textarea" id="obj-prompt">Tag this invoice: Consultancy for TechLab Srl, 12 hours at 120 EUR/h, invoiced in June with 22% VAT, invoice INV-2025-011.</textarea>
+          </div>
+          <div class="field" style="margin-top:10px">
+            <label>Schema</label>
+            <pre class="ai-out slim" id="obj-schema-view"></pre>
+          </div>
+          <div class="ai-actions">
+            <button class="btn btn-primary" id="obj-run" data-ai-action>Run</button>
+            <span class="text-sm text-muted" id="obj-elapsed"></span>
+          </div>
+          <pre class="ai-out placeholder" id="obj-out">Result appears here.</pre>
+          <div class="ai-meta" id="obj-meta"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>Stream</h3><span class="badge badge-current">token deltas</span></div>
+        <div class="card-body">
+          <div class="field">
+            <label for="stream-prompt">Prompt</label>
+            <textarea class="textarea" id="stream-prompt">Write a short haiku about paying taxes.</textarea>
+          </div>
+          <div class="ai-actions">
+            <button class="btn btn-primary" id="stream-run" data-ai-action>Stream</button>
+            <button class="btn" id="stream-cancel" disabled>Cancel</button>
+            <span class="text-sm text-muted" id="stream-elapsed"></span>
+            <span class="badge badge-excluded" id="stream-state" hidden>streaming</span>
+          </div>
+          <pre class="ai-out placeholder" id="stream-out">Deltas appear here as they arrive.</pre>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>Tools</h3><span class="badge badge-current">model calls your JS</span></div>
+        <div class="card-body">
+          <div class="field">
+            <label for="tool-prompt">Prompt</label>
+            <textarea class="textarea" id="tool-prompt">What is today's date, and what does 3500,50 look like formatted as euros?</textarea>
+          </div>
+          <div class="field-hint">Tools: <span class="text-mono">today</span> (ISO date + weekday) · <span class="text-mono">format_eur</span> (Italian-locale EUR formatting)</div>
+          <div class="ai-actions">
+            <button class="btn btn-primary" id="tool-run" data-ai-action>Run with tools</button>
+            <span class="text-sm text-muted" id="tool-elapsed"></span>
+          </div>
+          <pre class="ai-out placeholder" id="tool-out">Result appears here.</pre>
+          <div id="tool-calls"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="../js/app.js"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    const SCHEMAS = {
+      tagger: {
+        type: "object",
+        properties: {
+          customer: { type: "string", description: "Customer name extracted from the text" },
+          kind: { type: "string", enum: ["services", "products", "consulting", "training", "maintenance", "other"], description: "Kind of work" },
+          netAmountEur: { type: "number", description: "Net amount in euros" },
+          vatRatePct: { type: "integer", minimum: 0, maximum: 22, description: "VAT rate applied, percent" },
+          tags: { type: "array", items: { type: "string" }, maxItems: 6, description: "Short topical tags" },
+        },
+        required: ["customer", "kind", "netAmountEur", "vatRatePct", "tags"],
+      },
+      summary: {
+        type: "object",
+        properties: {
+          type: { type: "string", enum: ["income-tax", "inarcassa", "vat", "top-up"], description: "Appointment type" },
+          dueDate: { type: "string", description: "Due date as yyyy-mm-dd" },
+          quarter: { type: "integer", minimum: 1, maximum: 4, description: "Fiscal quarter, if mentioned" },
+          amountEur: { type: "number", description: "Amount due in euros" },
+          notes: { type: "string", description: "One-line plain-text summary" },
+        },
+        required: ["type", "dueDate", "amountEur", "notes"],
+      },
+    };
+
+    function setOut(el, value, isError) {
+      el.textContent = value;
+      el.classList.toggle("error", !!isError);
+      el.classList.remove("placeholder");
+    }
+
+    function elapsed(t0, el) {
+      if (el) el.textContent = ((performance.now() - t0) / 1000).toFixed(1) + "s";
+    }
+
+    function renderToolCalls(calls, container) {
+      container.innerHTML = "";
+      if (!calls || !calls.length) return;
+      calls.forEach((call) => {
+        const div = document.createElement("div");
+        div.className = "tool-call";
+        const head = document.createElement("div");
+        head.className = "tool-call-name";
+        head.textContent = call.name;
+        div.appendChild(head);
+        const args = document.createElement("div");
+        args.className = "text-muted";
+        args.textContent = "args: " + JSON.stringify(call.arguments);
+        div.appendChild(args);
+        if (call.error !== null && call.error !== undefined) {
+          const err = document.createElement("div");
+          err.style.color = "var(--danger)";
+          err.textContent = "error: " + call.error;
+          div.appendChild(err);
+        } else {
+          const res = document.createElement("div");
+          res.style.color = "var(--success)";
+          res.textContent = "result: " + JSON.stringify(call.result);
+          div.appendChild(res);
+        }
+        container.appendChild(div);
+      });
+    }
+
+    async function refreshStatus() {
+      const line = $("status-line");
+      const detail = $("status-detail");
+      if (!window.shell || !window.shell.ai) {
+        line.innerHTML = '<span class="badge badge-excluded">No shell</span>';
+        detail.textContent = "window.shell.ai is not available — open this page inside the app-ly shell.";
+        return;
+      }
+      const info = await window.shell.ai.info();
+      const badge = document.createElement("span");
+      badge.className = "badge " + (info.available ? "badge-open" : "badge-excluded");
+      badge.textContent = info.available ? "Available" : "Unavailable";
+      line.innerHTML = "";
+      line.appendChild(badge);
+
+      const bits = [];
+      if (info.reason) bits.push('reason: <span class="text-mono">' + info.reason + "</span>");
+      if (info.detail) bits.push("<span>" + info.detail + "</span>");
+      if (Array.isArray(info.models) && info.models.length) {
+        bits.push(
+          "model: <span class=\"text-mono\">" +
+            info.models.map((m) => m.id + (m.default ? " (default)" : "")).join(", ") +
+            "</span>",
+        );
+      }
+      const feats = info.features || {};
+      const on = Object.keys(feats).filter((k) => feats[k]);
+      bits.push(
+        "features: " +
+          (on.length
+            ? on.map((k) => '<span class="badge badge-open">' + k + "</span>").join(" ")
+            : "none"),
+      );
+      detail.innerHTML = bits.join(" &nbsp;·&nbsp; ");
+
+      const enabled = info.available;
+      document.querySelectorAll("[data-ai-action]").forEach((b) => {
+        b.disabled = !enabled;
+        b.title = enabled ? "" : "AI unavailable";
+      });
+    }
+
+    $("refresh-status").addEventListener("click", refreshStatus);
+
+    $("gen-run").addEventListener("click", async () => {
+      const out = $("gen-out");
+      setOut(out, "Generating…", false);
+      $("gen-meta").textContent = "";
+      const t0 = performance.now();
+      try {
+        const { text, model, toolCalls } = await window.shell.ai.generate($("gen-prompt").value, {
+          instructions: $("gen-instr").value || undefined,
+          maxTokens: parseInt($("gen-tokens").value, 10) || undefined,
+        });
+        setOut(out, text, false);
+        $("gen-meta").textContent =
+          "model " + model + " · " + (toolCalls ? toolCalls.length : 0) + " tool calls";
+      } catch (e) {
+        setOut(out, String(e), true);
+      }
+      elapsed(t0, $("gen-elapsed"));
+    });
+
+    function showSchema() {
+      $("obj-schema-view").textContent = JSON.stringify(SCHEMAS[$("obj-schema").value], null, 2);
+    }
+    $("obj-schema").addEventListener("change", showSchema);
+    showSchema();
+
+    $("obj-run").addEventListener("click", async () => {
+      const out = $("obj-out");
+      setOut(out, "Generating…", false);
+      $("obj-meta").textContent = "";
+      const t0 = performance.now();
+      try {
+        const { object, model, toolCalls } = await window.shell.ai.generateObject(
+          $("obj-prompt").value,
+          SCHEMAS[$("obj-schema").value],
+          { maxTokens: 300 },
+        );
+        setOut(out, JSON.stringify(object, null, 2), false);
+        $("obj-meta").textContent =
+          "model " + model + " · " + (toolCalls ? toolCalls.length : 0) + " tool calls";
+      } catch (e) {
+        setOut(out, String(e), true);
+      }
+      elapsed(t0, $("obj-elapsed"));
+    });
+
+    let stream = null;
+    $("stream-run").addEventListener("click", async () => {
+      const out = $("stream-out");
+      setOut(out, "", false);
+      $("stream-elapsed").textContent = "";
+      $("stream-cancel").disabled = false;
+      const state = $("stream-state");
+      state.hidden = false;
+      state.textContent = "streaming";
+      state.className = "badge badge-current";
+      const t0 = performance.now();
+      try {
+        stream = await window.shell.ai.stream($("stream-prompt").value);
+        let text = "";
+        stream.onText((delta) => {
+          text += delta;
+          out.textContent = text;
+        });
+        await stream.completed;
+        state.textContent = "done";
+        state.className = "badge badge-open";
+      } catch (e) {
+        state.textContent = "cancelled / error";
+        state.className = "badge badge-excluded";
+        if (out.textContent === "") setOut(out, String(e), true);
+      } finally {
+        stream = null;
+        $("stream-cancel").disabled = true;
+        elapsed(t0, $("stream-elapsed"));
+      }
+    });
+
+    $("stream-cancel").addEventListener("click", () => {
+      if (stream) stream.cancel();
+    });
+
+    $("tool-run").addEventListener("click", async () => {
+      const out = $("tool-out");
+      const callsBox = $("tool-calls");
+      callsBox.innerHTML = "";
+      setOut(out, "Generating…", false);
+      const t0 = performance.now();
+      try {
+        const { text, model, toolCalls } = await window.shell.ai.generate($("tool-prompt").value, {
+          tools: [
+            {
+              name: "today",
+              description: "Return today's date as ISO yyyy-mm-dd and the weekday name.",
+              parameters: { type: "object", properties: {} },
+              handler: () => {
+                const d = new Date();
+                return {
+                  iso: d.toISOString().slice(0, 10),
+                  weekday: d.toLocaleDateString("en-GB", { weekday: "long" }),
+                };
+              },
+            },
+            {
+              name: "format_eur",
+              description: "Format a numeric amount in euros using the Italian locale.",
+              parameters: {
+                type: "object",
+                properties: {
+                  amount: { type: "number", description: "Amount in euros" },
+                },
+                required: ["amount"],
+              },
+              handler: ({ amount }) => window.FiscoDesk.formatEUR(Number(amount) || 0),
+            },
+          ],
+        });
+        setOut(out, text + "\n\n— model: " + model, false);
+        renderToolCalls(toolCalls, callsBox);
+      } catch (e) {
+        setOut(out, String(e), true);
+      }
+      elapsed(t0, $("tool-elapsed"));
+    });
+
+    refreshStatus();
+  </script>
+</body>
+</html>

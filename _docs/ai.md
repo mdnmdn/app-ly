@@ -6,6 +6,10 @@ structured output, tool calling back into your own JavaScript, and token streami
 This is the deep reference. For the one-screen version, see
 [`js-api.md`](js-api.md#on-device-ai-ai) and
 [`app-agent-guide.md`](app-agent-guide.md#ai--generate--generateobject--stream).
+The same generate path is also on the binary as a headless command (`app-ly ai "say hi"`) —
+no window. JS tool handlers are not available; `[[allowedCommands]]` from the loaded
+`app.toml` are offered to the model instead (same allowlist as `shell.run` / `app-ly run`).
+See [`app-agent-guide.md`](app-agent-guide.md#cli).
 
 ## What it is, and the privacy story
 

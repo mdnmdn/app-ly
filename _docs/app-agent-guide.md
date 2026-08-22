@@ -67,6 +67,25 @@ await shell.saveFile("../escape.json", "...");   // rejected
 
 Need structure? Encode it in the filename, or use SQLite.
 
+## CLI
+
+The same binary can run shell features without opening a window — useful for probing AI, SQLite, files, or an allowlisted program. It loads the **same** `app.toml` as the GUI (`--config`, the folder containing the `.app`, then bundled / cwd fallbacks). `dataPath`, `[ai]`, and `[[allowedCommands]]` all apply.
+
+Invoke the executable inside the bundle (Finder / `open` still launches the GUI, and stdout would have nowhere to go):
+
+```bash
+app-ly.app/Contents/MacOS/app-ly --help
+app-ly.app/Contents/MacOS/app-ly ai "say hi"
+app-ly.app/Contents/MacOS/app-ly run git status
+app-ly.app/Contents/MacOS/app-ly --config ./app.toml db query notes.db "select * from notes"
+```
+
+- `run` is `shell.run`: only names in `[[allowedCommands]]`, with that entry's `args` / `cwd` / `env` / `timeoutMs`. No name lists the allowlist.
+- `ai` uses `[ai]` defaults. There is no JS, so page tool handlers are not available — instead each `[[allowedCommands]]` entry is exposed to the model as a tool (same allowlist as `run`).
+- HTTP/WebSocket servers, `spawn`, windows, and keychain still need the window.
+
+No command → desktop app, as before.
+
 ## `window.shell`
 
 Available on `window` before your scripts run. Methods return a `Promise` that **rejects with a string**. `shell.settings` is the exception — a plain object, no `await`.

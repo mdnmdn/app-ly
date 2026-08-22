@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dashboard — FiscoDesk</title>
+  <link rel="stylesheet" href="../css/common.css" />
+</head>
+<body class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-logo">FD</div>
+      <div>
+        <div class="sidebar-title">FiscoDesk</div>
+        <div class="sidebar-sub">Invoice & Tax</div>
+      </div>
+    </div>
+    <div class="nav-section">Main</div>
+    <ul class="nav-list">
+      <li><a class="nav-link active" href="dashboard.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="10" y="2" width="6" height="6" rx="1"/><rect x="2" y="10" width="6" height="6" rx="1"/><rect x="10" y="10" width="6" height="6" rx="1"/></svg>Dashboard</a></li>
+      <li><a class="nav-link" href="invoices.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2h10l2 2v12H4V2z"/><path d="M6 6h6M6 9h6M6 12h4"/></svg>Invoices</a></li>
+      <li><a class="nav-link" href="customers.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="6" r="3"/><path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>Customers</a></li>
+    </ul>
+    <div class="nav-section">Tax</div>
+    <ul class="nav-list">
+      <li><a class="nav-link" href="tax-regimes.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h12M3 8h12M3 12h8"/></svg>Tax Regimes</a></li>
+      <li><a class="nav-link" href="fiscal-years.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="12" height="11" rx="1"/><path d="M3 8h12M6 2v4M12 2v4"/></svg>Fiscal Years</a></li>
+      <li><a class="nav-link" href="tax-appointments.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="12" height="11" rx="1"/><path d="M3 8h12M7 11h2M11 11h2"/></svg>Tax Appointments</a></li>
+      <li><a class="nav-link" href="payments.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 6h14v8H2z"/><path d="M2 9h14M5 12h4"/></svg>Payments</a></li>
+      <li><a class="nav-link disabled" href="reports.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 14V8M7 14V4M11 14V10M15 14V6"/></svg>Reports</a></li>
+    </ul>
+  </aside>
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1>Dashboard</h1>
+    </div>
+    <div class="topbar-right">
+      <select class="select select-sm" aria-label="Fiscal year">
+        <option>FY 2025</option>
+        <option>FY 2024</option>
+      </select>
+      <button class="btn btn-ghost btn-icon" data-theme-toggle aria-pressed="false" title="Toggle theme">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12a5 5 0 010-10 5 5 0 000 10z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="main">
+    <section>
+      <h2 style="margin-bottom:4px">Welcome back, Marco</h2>
+      <p class="text-muted text-sm">Fiscal year 2025 · Forfettario regime · 14 invoices confirmed</p>
+    </section>
+
+    <section class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">Total Invoiced</div>
+        <div class="stat-value" data-eur="48750">—</div>
+        <div class="stat-delta positive">+12% vs last year</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Tax Due</div>
+        <div class="stat-value" data-eur="7312.50">—</div>
+        <div class="stat-delta">Due 16 Jul</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Inarcassa Due</div>
+        <div class="stat-value" data-eur="5362.50">—</div>
+        <div class="stat-delta">Q2 installment</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">VAT Due</div>
+        <div class="stat-value" data-eur="0">—</div>
+        <div class="stat-delta">Exempt (forfettario)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Expected Cash Flow</div>
+        <div class="stat-value" data-eur="12400">—</div>
+        <div class="stat-delta">Next 30 days</div>
+      </div>
+    </section>
+
+    <section class="charts-grid">
+      <div class="card chart-card">
+        <div class="card-header"><h3>Monthly Invoiced vs Expected Payments</h3></div>
+        <div class="card-body">
+          <svg class="line-chart" viewBox="0 0 400 140" preserveAspectRatio="none">
+            <line x1="0" y1="120" x2="400" y2="120" stroke="var(--border)" stroke-width="1"/>
+            <polyline fill="none" stroke="var(--accent)" stroke-width="2" points="0,100 40,85 80,70 120,75 160,55 200,60 240,40 280,45 320,30 360,35 400,25"/>
+            <polyline fill="none" stroke="var(--info)" stroke-width="2" stroke-dasharray="4 3" points="0,110 40,100 80,95 120,90 160,85 200,80 240,75 280,70 320,65 360,60 400,55"/>
+          </svg>
+          <div class="chart-legend">
+            <span><span class="legend-dot" style="background:var(--accent)"></span>Taxable + Gross</span>
+            <span><span class="legend-dot" style="background:var(--info)"></span>Expected Payments</span>
+          </div>
+        </div>
+      </div>
+      <div class="card chart-card">
+        <div class="card-header"><h3>Tax & Contributions</h3></div>
+        <div class="card-body">
+          <div class="chart-area">
+            <div class="chart-bar-group"><div class="chart-bar tax" style="height:65%"></div><span class="text-xs text-muted">Jan</span></div>
+            <div class="chart-bar-group"><div class="chart-bar inarcassa" style="height:45%"></div><span class="text-xs text-muted">Feb</span></div>
+            <div class="chart-bar-group"><div class="chart-bar vat" style="height:80%"></div><span class="text-xs text-muted">Mar</span></div>
+            <div class="chart-bar-group"><div class="chart-bar tax" style="height:55%"></div><span class="text-xs text-muted">Apr</span></div>
+            <div class="chart-bar-group"><div class="chart-bar inarcassa" style="height:70%"></div><span class="text-xs text-muted">May</span></div>
+            <div class="chart-bar-group"><div class="chart-bar vat" style="height:40%"></div><span class="text-xs text-muted">Jun</span></div>
+          </div>
+          <div class="chart-legend">
+            <span><span class="legend-dot" style="background:var(--warn)"></span>Tax</span>
+            <span><span class="legend-dot" style="background:var(--info)"></span>Inarcassa</span>
+            <span><span class="legend-dot" style="background:var(--accent)"></span>Top-up</span>
+          </div>
+        </div>
+      </div>
+      <div class="card chart-card">
+        <div class="card-header"><h3>Invoice Status</h3></div>
+        <div class="card-body" style="text-align:center">
+          <svg class="pie-chart" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="15.9" fill="transparent" stroke="var(--success)" stroke-width="3.2" stroke-dasharray="60 40" stroke-dashoffset="25"/>
+            <circle cx="18" cy="18" r="15.9" fill="transparent" stroke="var(--info)" stroke-width="3.2" stroke-dasharray="25 75" stroke-dashoffset="65"/>
+            <circle cx="18" cy="18" r="15.9" fill="transparent" stroke="var(--muted)" stroke-width="3.2" stroke-dasharray="15 85" stroke-dashoffset="90"/>
+          </svg>
+          <div class="pie-legend">
+            <span><span class="badge badge-confirmed">Confirmed</span> 10 (71%)</span>
+            <span><span class="badge badge-planned">Planned</span> 3 (21%)</span>
+            <span><span class="badge badge-excluded">Excluded</span> 1 (7%)</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="events-grid">
+      <div class="card">
+        <div class="card-header"><h3>Upcoming Tax Appointments</h3><a href="tax-appointments.html" class="btn btn-sm btn-ghost">View all</a></div>
+        <div class="card-body">
+          <div class="event-item">
+            <div class="event-date">16 Jul</div>
+            <div><strong>Q2 Income Tax</strong><div class="text-sm text-muted">FY 2025 · Tax · <span data-eur="1828.13">—</span></div></div>
+            <span class="badge badge-current">Current</span>
+          </div>
+          <div class="event-item">
+            <div class="event-date">20 Aug</div>
+            <div><strong>Inarcassa Q2</strong><div class="text-sm text-muted">FY 2025 · Inarcassa · <span data-eur="1340.63">—</span></div></div>
+            <span class="badge badge-planned">Planned</span>
+          </div>
+          <div class="event-item">
+            <div class="event-date">16 Oct</div>
+            <div><strong>Q3 Income Tax</strong><div class="text-sm text-muted">FY 2025 · Tax · <span data-eur="1950">—</span></div></div>
+            <span class="badge badge-planned">Planned</span>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>Payment Alerts</h3><a href="invoices.html" class="btn btn-sm btn-ghost">View invoices</a></div>
+        <div class="card-body">
+          <div class="event-item">
+            <div class="event-date" style="color:var(--danger)">Overdue</div>
+            <div><strong>INV-2025-008</strong><div class="text-sm text-muted">Studio Rossi · <span data-eur="3500">—</span> unpaid</div></div>
+          </div>
+          <div class="event-item">
+            <div class="event-date">28 Jun</div>
+            <div><strong>INV-2025-011</strong><div class="text-sm text-muted">TechLab Srl · <span data-eur="2200">—</span> · 70% paid</div></div>
+          </div>
+          <div class="event-item">
+            <div class="event-date">05 Jul</div>
+            <div><strong>INV-2025-012</strong><div class="text-sm text-muted">Freelance Co · <span data-eur="1800">—</span> due soon</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="fab-group">
+    <button class="fab" data-drawer-open="invoice-drawer" data-shortcut-n>New Invoice <kbd>N</kbd></button>
+    <button class="fab" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" data-modal-open="appointment-modal">New Tax Appointment</button>
+    <button class="fab" style="background:var(--surface);color:var(--fg);border:1px solid var(--border)" data-drawer-open="payment-drawer">Register Payment</button>
+  </div>
+
+  <div class="overlay" id="appointment-modal" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-header"><h2>New Tax Appointment</h2><button class="btn btn-ghost btn-icon" data-modal-close="appointment-modal">✕</button></div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="field span-2">
+            <label>Fiscal Year</label>
+            <select class="select"><option selected>2025 — Open</option><option>2026 — Planned</option></select>
+            <span class="field-hint">Appointment is recorded under the selected fiscal year</span>
+          </div>
+          <div class="field"><label>Date</label><input class="input" type="date" value="2025-07-16" /></div>
+          <div class="field"><label>Type</label><select class="select"><option>Tax</option><option>Inarcassa</option><option>VAT</option><option>Top-up</option></select></div>
+          <div class="field"><label>Amount</label><input class="input" value="1828,13" /></div>
+          <div class="field span-2"><label>Notes</label><textarea class="textarea">Q2 income tax installment</textarea></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-modal-close="appointment-modal">Cancel</button>
+        <button class="btn btn-primary" data-modal-close="appointment-modal">Save Appointment</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="drawer-overlay" id="invoice-drawer-overlay"></div>
+  <aside class="drawer" id="invoice-drawer">
+    <div class="drawer-header"><h2>New Invoice</h2><button class="btn btn-ghost btn-icon" data-drawer-close="invoice-drawer">✕</button></div>
+    <div class="drawer-body">
+      <div class="form-grid">
+        <div class="field"><label>Invoice Number</label><input class="input" value="INV-2025-016" /></div>
+        <div class="field"><label>Status</label><select class="select"><option>Planned</option><option>Confirmed</option></select></div>
+        <div class="field span-2"><label>Customer</label><select class="select"><option>TechLab Srl</option><option>Studio Rossi</option></select></div>
+        <div class="field span-2"><label>Description</label><input class="input" placeholder="Service description" /></div>
+        <div class="field"><label>Taxable Amount</label><input class="input" placeholder="0,00" /></div>
+        <div class="field"><label>Gross Amount</label><input class="input" value="—" readonly style="opacity:0.7" /></div>
+      </div>
+    </div>
+    <div class="drawer-footer">
+      <button class="btn" data-drawer-close="invoice-drawer">Cancel</button>
+      <button class="btn btn-primary" data-drawer-close="invoice-drawer">Save Invoice</button>
+    </div>
+  </aside>
+
+  <div class="drawer-overlay" id="payment-drawer-overlay"></div>
+  <aside class="drawer" id="payment-drawer">
+    <div class="drawer-header"><h2>Register Payment</h2><button class="btn btn-ghost btn-icon" data-drawer-close="payment-drawer">✕</button></div>
+    <div class="drawer-body">
+      <div class="form-grid">
+        <div class="field span-2"><label>Direction</label><select class="select"><option>Inbound</option><option>Outbound</option></select></div>
+        <div class="field"><label>Date</label><input class="input" type="date" /></div>
+        <div class="field"><label>Amount</label><input class="input" placeholder="0,00" /></div>
+        <div class="field span-2"><label>Notes</label><textarea class="textarea"></textarea></div>
+      </div>
+    </div>
+    <div class="drawer-footer">
+      <button class="btn" data-drawer-close="payment-drawer">Cancel</button>
+      <button class="btn btn-primary" data-drawer-close="payment-drawer">Register</button>
+    </div>
+  </aside>
+
+  <script src="../js/app.js"></script>
+</body>
+</html>

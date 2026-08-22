@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reports — FiscoDesk</title>
+  <link rel="stylesheet" href="../css/common.css" />
+  <style>#app { display: contents; }</style>
+</head>
+<body class="app-shell">
+  <div id="app">
+    <app-shell page="reports" title="Reports">
+      <template #topbar-right>
+        <button class="btn btn-ghost btn-icon" data-theme-toggle title="Toggle theme"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12a5 5 0 010-10 5 5 0 000 10z"/></svg></button>
+      </template>
+      <div class="card">
+        <div class="card-body coming-soon">
+          <svg class="coming-soon-icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 36V20M18 36V12M28 36V24M38 36V16"/></svg>
+          <h2>Reports & Exports</h2>
+          <p class="text-muted" style="max-width:400px;margin:8px auto 0">Summary exports, annual tax reports, and PDF summaries are planned for a future release. Use per-view CSV/PDF export buttons in the meantime.</p>
+        </div>
+      </div>
+    </app-shell>
+  </div>
+
+  <script src="../vendor/vue.global.js"></script>
+  <script src="../js/theme.js"></script>
+  <script type="module">
+    import { AppShell } from '../js/components/app-shell.js';
+    const { createApp } = Vue;
+    createApp({
+      components: { AppShell },
+    }).mount('#app');
+  </script>
+</body>
+</html>

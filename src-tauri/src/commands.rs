@@ -38,26 +38,38 @@ fn data_file_path(state: &ShellState, name: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+pub fn save_file(state: &ShellState, name: &str, contents: &str) -> Result<(), String> {
+    let path = data_file_path(state, name)?;
+    std::fs::write(path, contents).map_err(|e| format!("write file: {e}"))
+}
+
+pub fn read_file(state: &ShellState, name: &str) -> Result<String, String> {
+    let path = data_file_path(state, name)?;
+    std::fs::read_to_string(path).map_err(|e| format!("read file: {e}"))
+}
+
+pub fn delete_file(state: &ShellState, name: &str) -> Result<(), String> {
+    let path = data_file_path(state, name)?;
+    std::fs::remove_file(path).map_err(|e| format!("delete file: {e}"))
+}
+
 #[tauri::command]
 pub fn shell_save_file(
     state: State<'_, ShellState>,
     name: String,
     contents: String,
 ) -> Result<(), String> {
-    let path = data_file_path(&state, &name)?;
-    std::fs::write(path, contents).map_err(|e| format!("write file: {e}"))
+    save_file(&state, &name, &contents)
 }
 
 #[tauri::command]
 pub fn shell_read_file(state: State<'_, ShellState>, name: String) -> Result<String, String> {
-    let path = data_file_path(&state, &name)?;
-    std::fs::read_to_string(path).map_err(|e| format!("read file: {e}"))
+    read_file(&state, &name)
 }
 
 #[tauri::command]
 pub fn shell_delete_file(state: State<'_, ShellState>, name: String) -> Result<(), String> {
-    let path = data_file_path(&state, &name)?;
-    std::fs::remove_file(path).map_err(|e| format!("delete file: {e}"))
+    delete_file(&state, &name)
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -399,8 +411,7 @@ pub struct FetchResponse {
     pub body: String,
 }
 
-#[tauri::command]
-pub async fn shell_fetch(
+pub async fn fetch(
     url: String,
     method: Option<String>,
     headers: Option<HashMap<String, String>>,
@@ -463,6 +474,25 @@ pub async fn shell_fetch(
         headers: response_headers,
         body,
     })
+}
+
+pub fn fetch_blocking(
+    url: String,
+    method: Option<String>,
+    headers: Option<HashMap<String, String>>,
+    body: Option<String>,
+) -> Result<FetchResponse, String> {
+    tauri::async_runtime::block_on(fetch(url, method, headers, body))
+}
+
+#[tauri::command]
+pub async fn shell_fetch(
+    url: String,
+    method: Option<String>,
+    headers: Option<HashMap<String, String>>,
+    body: Option<String>,
+) -> Result<FetchResponse, String> {
+    fetch(url, method, headers, body).await
 }
 
 #[tauri::command]

@@ -36,6 +36,26 @@ pub fn deploy_folder() -> Result<PathBuf, String> {
     Ok(exe_dir.to_path_buf())
 }
 
+/// Bundled `app.toml` next to the executable (`Contents/Resources` on macOS).
+/// The path is returned even if the file is missing — callers record it as a search.
+pub fn bundled_resource_app_toml() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let exe_dir = exe.parent()?;
+
+    #[cfg(target_os = "macos")]
+    {
+        let in_macos_dir = exe_dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name == "MacOS");
+        if in_macos_dir {
+            return Some(exe_dir.parent()?.join("Resources").join("app.toml"));
+        }
+    }
+
+    Some(exe_dir.join("app.toml"))
+}
+
 #[derive(Debug, Clone)]
 pub struct ResolvedPaths {
     pub icon: PathBuf,

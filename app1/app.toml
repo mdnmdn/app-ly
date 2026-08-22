@@ -1,0 +1,5 @@
+icon = ""
+name = "Desk finance"
+contents = "design"
+dataPath = "data"
+showDevMenu = true

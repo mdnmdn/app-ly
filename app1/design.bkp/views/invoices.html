@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Invoices — FiscoDesk</title>
+  <link rel="stylesheet" href="../css/common.css" />
+</head>
+<body class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="sidebar-logo">FD</div>
+      <div><div class="sidebar-title">FiscoDesk</div><div class="sidebar-sub">Invoice & Tax</div></div>
+    </div>
+    <div class="nav-section">Main</div>
+    <ul class="nav-list">
+      <li><a class="nav-link" href="dashboard.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="10" y="2" width="6" height="6" rx="1"/><rect x="2" y="10" width="6" height="6" rx="1"/><rect x="10" y="10" width="6" height="6" rx="1"/></svg>Dashboard</a></li>
+      <li><a class="nav-link active" href="invoices.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2h10l2 2v12H4V2z"/><path d="M6 6h6M6 9h6M6 12h4"/></svg>Invoices</a></li>
+      <li><a class="nav-link" href="customers.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="6" r="3"/><path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>Customers</a></li>
+    </ul>
+    <div class="nav-section">Tax</div>
+    <ul class="nav-list">
+      <li><a class="nav-link" href="tax-regimes.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h12M3 8h12M3 12h8"/></svg>Tax Regimes</a></li>
+      <li><a class="nav-link" href="fiscal-years.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="12" height="11" rx="1"/><path d="M3 8h12M6 2v4M12 2v4"/></svg>Fiscal Years</a></li>
+      <li><a class="nav-link" href="tax-appointments.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="12" height="11" rx="1"/><path d="M3 8h12M7 11h2M11 11h2"/></svg>Tax Appointments</a></li>
+      <li><a class="nav-link" href="payments.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 6h14v8H2z"/><path d="M2 9h14M5 12h4"/></svg>Payments</a></li>
+      <li><a class="nav-link disabled" href="reports.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 14V8M7 14V4M11 14V10M15 14V6"/></svg>Reports</a></li>
+    </ul>
+  </aside>
+
+  <header class="topbar">
+    <div class="topbar-left"><h1>Invoices</h1></div>
+    <div class="topbar-right">
+      <select class="select select-sm"><option>FY 2025</option><option>FY 2024</option></select>
+      <button class="btn btn-ghost btn-icon" data-theme-toggle title="Toggle theme"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12a5 5 0 010-10 5 5 0 000 10z"/></svg></button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="toolbar">
+      <select class="select select-sm"><option>All statuses</option><option>Confirmed</option><option>Planned</option><option>Excluded</option></select>
+      <select class="select select-sm"><option>All customers</option><option>Studio Rossi</option><option>TechLab Srl</option><option>Freelance Co</option></select>
+      <input class="input input-sm search-input" type="search" placeholder="Search number or description…" />
+      <div class="toolbar-spacer"></div>
+      <button class="btn btn-sm">Export CSV</button>
+      <button class="btn btn-sm">Export PDF</button>
+      <button class="btn btn-primary" data-inline-new="invoices-table" data-shortcut-n>New Invoice <kbd style="font-size:0.65rem;opacity:0.7">N</kbd></button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table" id="invoices-table" data-inline-table>
+        <thead>
+          <tr>
+            <th data-field="number" class="col-required" data-type="mono">Invoice #</th>
+            <th data-field="customer" class="col-required" data-type="select" data-options="TechLab Srl|Studio Rossi|Freelance Co|Acme Consulting">Customer</th>
+            <th data-field="description" class="col-required">Description</th>
+            <th data-field="status" class="col-required" data-type="select" data-options="Confirmed|Planned|Excluded">Status</th>
+            <th data-field="invoiceDate" class="col-required" data-type="date">Invoice Date</th>
+            <th data-field="paymentDate" data-type="date">Expected Payment</th>
+            <th data-field="taxable" class="col-required num" data-type="eur">Taxable</th>
+            <th data-field="topup" data-readonly="true" data-type="eur" class="num">Top-up</th>
+            <th data-field="vat" data-readonly="true" data-type="eur" class="num">VAT</th>
+            <th data-field="gross" data-readonly="true" data-type="eur" class="num">Gross</th>
+            <th data-field="paid" data-readonly="true">Paid</th>
+            <th data-field="actions"></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-field="number" data-value="INV-2025-014" class="text-mono">INV-2025-014</td>
+            <td data-field="customer" data-value="TechLab Srl">TechLab Srl</td>
+            <td data-field="description" data-value="API integration Q2">API integration Q2</td>
+            <td data-field="status" data-value="Confirmed"><span class="badge badge-confirmed">Confirmed</span></td>
+            <td data-field="invoiceDate" data-value="2025-06-12">12/06/2025</td>
+            <td data-field="paymentDate" data-value="2025-07-12">12/07/2025</td>
+            <td data-field="taxable" data-value="4200" class="num" data-eur="4200">—</td>
+            <td data-field="topup" data-value="84" class="num" data-eur="84">—</td>
+            <td data-field="vat" data-value="0" class="num" data-eur="0">—</td>
+            <td data-field="gross" data-value="4284" class="num" data-eur="4284">—</td>
+            <td data-field="paid"><div class="progress-label">Unpaid</div><div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div></td>
+            <td class="actions" data-field="actions">
+              <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button><button type="button" class="btn btn-sm btn-ghost">Pay</button><button type="button" class="btn btn-sm btn-danger" data-confirm="Delete invoice INV-2025-014?">Del</button></span>
+              <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+            </td>
+          </tr>
+          <tr>
+            <td data-field="number" data-value="INV-2025-011" class="text-mono">INV-2025-011</td>
+            <td data-field="customer" data-value="TechLab Srl">TechLab Srl</td>
+            <td data-field="description" data-value="Consulting March">Consulting March</td>
+            <td data-field="status" data-value="Confirmed"><span class="badge badge-confirmed">Confirmed</span></td>
+            <td data-field="invoiceDate" data-value="2025-03-28">28/03/2025</td>
+            <td data-field="paymentDate" data-value="2025-06-28">28/06/2025</td>
+            <td data-field="taxable" data-value="2200" class="num" data-eur="2200">—</td>
+            <td data-field="topup" data-value="44" class="num" data-eur="44">—</td>
+            <td data-field="vat" data-value="0" class="num" data-eur="0">—</td>
+            <td data-field="gross" data-value="2244" class="num" data-eur="2244">—</td>
+            <td data-field="paid"><div class="progress-label">70%</div><div class="progress-bar"><div class="progress-fill" style="width:70%"></div></div></td>
+            <td class="actions" data-field="actions">
+              <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button><button type="button" class="btn btn-sm btn-ghost">Pay</button><button type="button" class="btn btn-sm btn-danger" data-confirm="Delete?">Del</button></span>
+              <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+            </td>
+          </tr>
+          <tr>
+            <td data-field="number" data-value="INV-2025-008" class="text-mono">INV-2025-008</td>
+            <td data-field="customer" data-value="Studio Rossi">Studio Rossi</td>
+            <td data-field="description" data-value="Brand identity">Brand identity</td>
+            <td data-field="status" data-value="Confirmed"><span class="badge badge-confirmed">Confirmed</span></td>
+            <td data-field="invoiceDate" data-value="2025-02-15">15/02/2025</td>
+            <td data-field="paymentDate" data-value="2025-05-15">15/05/2025</td>
+            <td data-field="taxable" data-value="3500" class="num" data-eur="3500">—</td>
+            <td data-field="topup" data-value="70" class="num" data-eur="70">—</td>
+            <td data-field="vat" data-value="0" class="num" data-eur="0">—</td>
+            <td data-field="gross" data-value="3570" class="num" data-eur="3570">—</td>
+            <td data-field="paid"><div class="progress-label" style="color:var(--danger)">Unpaid</div><div class="progress-bar"><div class="progress-fill" style="width:0%;background:var(--danger)"></div></div></td>
+            <td class="actions" data-field="actions">
+              <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button><button type="button" class="btn btn-sm btn-ghost">Pay</button><button type="button" class="btn btn-sm btn-danger" data-confirm="Delete?">Del</button></span>
+              <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+            </td>
+          </tr>
+          <tr>
+            <td data-field="number" data-value="INV-2025-015" class="text-mono">INV-2025-015</td>
+            <td data-field="customer" data-value="Freelance Co">Freelance Co</td>
+            <td data-field="description" data-value="Workshop facilitation">Workshop facilitation</td>
+            <td data-field="status" data-value="Planned"><span class="badge badge-planned">Planned</span></td>
+            <td data-field="invoiceDate" data-value="2025-07-01">01/07/2025</td>
+            <td data-field="paymentDate" data-value="2025-07-31">31/07/2025</td>
+            <td data-field="taxable" data-value="1800" class="num" data-eur="1800">—</td>
+            <td data-field="topup" data-value="36" class="num" data-eur="36">—</td>
+            <td data-field="vat" data-value="0" class="num" data-eur="0">—</td>
+            <td data-field="gross" data-value="1836" class="num" data-eur="1836">—</td>
+            <td data-field="paid"><div class="progress-label">—</div><div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div></td>
+            <td class="actions" data-field="actions">
+              <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button><button type="button" class="btn btn-sm btn-ghost">Pay</button><button type="button" class="btn btn-sm btn-danger" data-confirm="Delete?">Del</button></span>
+              <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+            </td>
+          </tr>
+          <tr>
+            <td data-field="number" data-value="INV-2025-003" class="text-mono">INV-2025-003</td>
+            <td data-field="customer" data-value="Studio Rossi">Studio Rossi</td>
+            <td data-field="description" data-value="Retainer Jan (excluded)">Retainer Jan (excluded)</td>
+            <td data-field="status" data-value="Excluded"><span class="badge badge-excluded">Excluded</span></td>
+            <td data-field="invoiceDate" data-value="2025-01-10">10/01/2025</td>
+            <td data-field="paymentDate" data-value="">—</td>
+            <td data-field="taxable" data-value="1200" class="num" data-eur="1200">—</td>
+            <td data-field="topup" data-value="0" class="num" data-eur="0">—</td>
+            <td data-field="vat" data-value="0" class="num" data-eur="0">—</td>
+            <td data-field="gross" data-value="1200" class="num" data-eur="1200">—</td>
+            <td data-field="paid"><div class="progress-label">Excluded</div></td>
+            <td class="actions" data-field="actions">
+              <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button><button type="button" class="btn btn-sm btn-danger" data-confirm="Delete?">Del</button></span>
+              <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <script src="../js/app.js"></script>
+</body>
+</html>

@@ -87,6 +87,10 @@ Run:
 npm run tauri dev
 ```
 
+The built binary also accepts headless commands (`ai`, `db`, `file`, `fetch`, `run`, `info`)
+so you can exercise those APIs without opening a window. See
+[`app-agent-guide.md`](app-agent-guide.md#cli).
+
 ## Project layout
 
 ```

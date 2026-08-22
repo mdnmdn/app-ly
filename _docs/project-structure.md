@@ -32,7 +32,8 @@ app-ly/
 │   │   ├── shell-api.js       # defines window.shell; injected via initialization_script
 │   │   └── shell-shortcuts.js # devtools/reload keyboard shortcuts; injected alongside it
 │   ├── src/
-│   │   ├── main.rs            # binary entrypoint, calls lib::run()
+│   │   ├── main.rs            # binary entrypoint: CLI intercept then lib::run()
+│   │   ├── cli.rs             # headless CLI (ai, db, file, fetch, run, info)
 │   │   ├── lib.rs             # app setup: discovers app.toml, builds the main window,
 │   │   │                        # registers the `shell://` protocol, assembles the init script,
 │   │   │                        # registers the tauri invoke_handler and state managers
@@ -66,7 +67,8 @@ untracked.
 
 ## How a request flows through the shell
 
-1. `main.rs` → `lib.rs::run()` builds the Tauri app, registers the `shell://` protocol handler,
+1. `main.rs` → if argv is a recognised CLI command, `cli.rs` runs it headless and exits.
+   Otherwise `lib.rs::run()` builds the Tauri app, registers the `shell://` protocol handler,
    and runs `setup()`.
 2. `setup()` calls `plan_startup()`, which uses `config.rs`/`paths.rs` to discover and resolve
    `app.toml`, then builds the main window pointed at `shell://localhost/<entry_filename>` with

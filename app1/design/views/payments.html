@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="../css/common.css" />
+  <style>#app { display: contents; }</style>
+  <title>Payments — FiscoDesk</title>
+</head>
+<body class="app-shell">
+  <div id="app">
+    <app-shell page="payments" title="Payments">
+      <template #topbar-right>
+        <select class="select select-sm"><option>FY 2025</option></select>
+        <button class="btn btn-ghost btn-icon" data-theme-toggle title="Toggle theme">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12a5 5 0 010-10 5 5 0 000 10z"/></svg>
+        </button>
+      </template>
+
+      <div class="toolbar">
+        <div class="toolbar-spacer"></div>
+        <button class="btn btn-sm">Export CSV</button>
+        <button class="btn btn-sm">Export PDF</button>
+        <button class="btn btn-primary" @click="showUnifiedModal = true">Unified Register</button>
+      </div>
+
+      <div>
+        <div class="tabs">
+          <button class="tab" :class="{ active: activeTab === 'inbound' }" @click="activeTab = 'inbound'">Inbound (Customer → Me)</button>
+          <button class="tab" :class="{ active: activeTab === 'outbound' }" @click="activeTab = 'outbound'">Outbound (Me → Authorities)</button>
+        </div>
+
+        <div class="tab-panel" :class="{ active: activeTab === 'inbound' }" v-show="activeTab === 'inbound'">
+          <div class="toolbar" style="margin-bottom:12px">
+            <div class="toolbar-spacer"></div>
+            <button class="btn btn-primary btn-sm" @click="addInboundPayment">Register Inbound Payment</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="col-required">Date</th>
+                  <th class="col-required">Invoice(s)</th>
+                  <th class="col-required">Customer</th>
+                  <th class="col-required num">Amount Received</th>
+                  <th>Notes</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="p in inboundPayments" :key="p.id">
+                  <td>
+                    <template v-if="editingInbound === p.id">
+                      <input class="input input-sm" type="date" v-model="p.date" />
+                    </template>
+                    <template v-else>{{ p.date }}</template>
+                  </td>
+                  <td class="text-mono">
+                    <template v-if="editingInbound === p.id">
+                      <input class="input input-sm" v-model="p.invoices" />
+                    </template>
+                    <template v-else>{{ p.invoices }}</template>
+                  </td>
+                  <td>
+                    <template v-if="editingInbound === p.id">
+                      <select class="select select-sm" v-model="p.customer">
+                        <option>TechLab Srl</option>
+                        <option>Studio Rossi</option>
+                        <option>Freelance Co</option>
+                        <option>Acme Consulting</option>
+                      </select>
+                    </template>
+                    <template v-else>{{ p.customer }}</template>
+                  </td>
+                  <td class="num">
+                    <template v-if="editingInbound === p.id">
+                      <input class="input input-sm" type="number" v-model.number="p.amount" />
+                    </template>
+                    <template v-else>{{ formatEUR(p.amount) }}</template>
+                  </td>
+                  <td class="text-muted">
+                    <template v-if="editingInbound === p.id">
+                      <textarea class="textarea" v-model="p.notes"></textarea>
+                    </template>
+                    <template v-else>{{ p.notes }}</template>
+                  </td>
+                  <td class="actions">
+                    <template v-if="editingInbound === p.id">
+                      <button type="button" class="btn btn-sm btn-primary" @click="editingInbound = null">Save</button>
+                      <button type="button" class="btn btn-sm" @click="editingInbound = null">Cancel</button>
+                    </template>
+                    <template v-else>
+                      <button type="button" class="btn btn-sm btn-ghost" @click="editingInbound = p.id">Edit</button>
+                      <button type="button" class="btn btn-sm btn-danger" @click="removeInboundPayment(p.id)">Delete</button>
+                    </template>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="tab-panel" :class="{ active: activeTab === 'outbound' }" v-show="activeTab === 'outbound'">
+          <div class="toolbar" style="margin-bottom:12px">
+            <div class="toolbar-spacer"></div>
+            <button class="btn btn-primary btn-sm" @click="addOutboundPayment">Register Outbound Payment</button>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="col-required">Date</th>
+                  <th class="col-required">Type</th>
+                  <th class="col-required num">Amount</th>
+                  <th class="col-required">FY</th>
+                  <th>Appointment</th>
+                  <th>Notes</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="p in outboundPayments" :key="p.id">
+                  <td>
+                    <template v-if="editingOutbound === p.id">
+                      <input class="input input-sm" type="date" v-model="p.date" />
+                    </template>
+                    <template v-else>{{ p.date }}</template>
+                  </td>
+                  <td>
+                    <template v-if="editingOutbound === p.id">
+                      <select class="select select-sm" v-model="p.type">
+                        <option>Tax</option>
+                        <option>Inarcassa</option>
+                        <option>VAT</option>
+                        <option>Top-up</option>
+                      </select>
+                    </template>
+                    <template v-else>{{ p.type }}</template>
+                  </td>
+                  <td class="num">
+                    <template v-if="editingOutbound === p.id">
+                      <input class="input input-sm" type="number" v-model.number="p.amount" />
+                    </template>
+                    <template v-else>{{ formatEUR(p.amount) }}</template>
+                  </td>
+                  <td>
+                    <template v-if="editingOutbound === p.id">
+                      <select class="select select-sm" v-model="p.fiscalYear">
+                        <option>2025</option>
+                        <option>2024</option>
+                        <option>2026</option>
+                      </select>
+                    </template>
+                    <template v-else>{{ p.fiscalYear }}</template>
+                  </td>
+                  <td class="text-mono">
+                    <template v-if="editingOutbound === p.id">
+                      <input class="input input-sm" v-model="p.appointment" />
+                    </template>
+                    <template v-else>{{ p.appointment || '—' }}</template>
+                  </td>
+                  <td class="text-muted">
+                    <template v-if="editingOutbound === p.id">
+                      <textarea class="textarea" v-model="p.notes"></textarea>
+                    </template>
+                    <template v-else>{{ p.notes }}</template>
+                  </td>
+                  <td class="actions">
+                    <template v-if="editingOutbound === p.id">
+                      <button type="button" class="btn btn-sm btn-primary" @click="editingOutbound = null">Save</button>
+                      <button type="button" class="btn btn-sm" @click="editingOutbound = null">Cancel</button>
+                    </template>
+                    <template v-else>
+                      <button type="button" class="btn btn-sm btn-ghost" @click="editingOutbound = p.id">Edit</button>
+                      <button type="button" class="btn btn-sm btn-danger" @click="removeOutboundPayment(p.id)">Delete</button>
+                    </template>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <ui-modal v-model:open="showUnifiedModal" title="Unified Payment Register">
+        <div class="form-grid">
+          <div class="field span-2"><label>Direction</label><select class="select" v-model="unifiedPayment.direction"><option>Inbound (Customer → Me)</option><option>Outbound (Me → Authorities)</option></select></div>
+          <div class="field"><label>Date</label><input class="input" type="date" v-model="unifiedPayment.date" /></div>
+          <div class="field"><label>Amount</label><input class="input" placeholder="0,00" v-model="unifiedPayment.amount" /></div>
+          <div class="field span-2"><label>Notes</label><textarea class="textarea" v-model="unifiedPayment.notes"></textarea></div>
+        </div>
+        <template #footer>
+          <button class="btn" @click="showUnifiedModal = false">Cancel</button>
+          <button class="btn btn-primary" @click="showUnifiedModal = false">Register Payment</button>
+        </template>
+      </ui-modal>
+    </app-shell>
+  </div>
+
+  <script src="../vendor/vue.global.js"></script>
+  <script src="../js/theme.js"></script>
+  <script type="module">
+    import { AppShell } from '../js/components/app-shell.js';
+    import { UiModal } from '../js/components/ui-modal.js';
+    const { createApp } = Vue;
+    createApp({
+      components: { AppShell, UiModal },
+      data() {
+        return {
+          activeTab: 'inbound',
+          editingInbound: null,
+          editingOutbound: null,
+          nextInboundId: 4,
+          nextOutboundId: 4,
+          showUnifiedModal: false,
+          unifiedPayment: { direction: 'Inbound (Customer → Me)', date: '', amount: '', notes: '' },
+          inboundPayments: [
+            { id: 1, date: '2025-06-05', invoices: 'INV-2025-011', customer: 'TechLab Srl', amount: 1570.80, notes: 'Partial — 70% of invoice' },
+            { id: 2, date: '2025-04-22', invoices: 'INV-2025-006', customer: 'Studio Rossi', amount: 2450, notes: 'Full payment via bank transfer' },
+            { id: 3, date: '2025-03-10', invoices: 'INV-2025-004, INV-2025-005', customer: 'Freelance Co', amount: 5200, notes: 'Batch payment for two invoices' },
+          ],
+          outboundPayments: [
+            { id: 1, date: '2025-04-16', type: 'Tax', amount: 1650, fiscalYear: '2025', appointment: 'Q1 Tax · 16/04', notes: 'F24 payment' },
+            { id: 2, date: '2025-05-20', type: 'Inarcassa', amount: 1280.50, fiscalYear: '2025', appointment: 'Q1 Inarcassa · 20/05', notes: 'DSM payment' },
+            { id: 3, date: '2025-02-18', type: 'Top-up', amount: 420, fiscalYear: '2025', appointment: '', notes: 'Annual top-up contribution' },
+          ],
+        };
+      },
+      methods: {
+        formatEUR: window.FiscoDesk.formatEUR,
+        addInboundPayment() {
+          const id = this.nextInboundId++;
+          this.inboundPayments.unshift({ id, date: '', invoices: '', customer: 'TechLab Srl', amount: 0, notes: '' });
+          this.editingInbound = id;
+        },
+        addOutboundPayment() {
+          const id = this.nextOutboundId++;
+          this.outboundPayments.unshift({ id, date: '', type: 'Tax', amount: 0, fiscalYear: '2025', appointment: '', notes: '' });
+          this.editingOutbound = id;
+        },
+        removeInboundPayment(id) {
+          if (confirm('Delete payment?')) {
+            this.inboundPayments = this.inboundPayments.filter((p) => p.id !== id);
+          }
+        },
+        removeOutboundPayment(id) {
+          if (confirm('Delete payment?')) {
+            this.outboundPayments = this.outboundPayments.filter((p) => p.id !== id);
+          }
+        },
+      },
+    }).mount('#app');
+  </script>
+</body>
+</html>

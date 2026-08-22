@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Lab — FiscoDesk</title>
+  <link rel="stylesheet" href="../css/common.css" />
+  <style>#app { display: contents; }</style>
+  <style>
+    .ai-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      align-items: start;
+    }
+    .ai-out {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 12px;
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      min-height: 64px;
+      max-height: 340px;
+      overflow: auto;
+      margin-top: 10px;
+    }
+    .ai-out.error {
+      color: var(--danger);
+      border-color: var(--danger-muted);
+      background: var(--danger-muted);
+    }
+    .ai-out.placeholder {
+      color: var(--muted);
+      opacity: 0.6;
+    }
+    .ai-out.slim { min-height: 0; max-height: 220px; margin-top: 0; }
+    .ai-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .ai-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 0.8125rem;
+    }
+    .status-detail { margin-top: 8px; }
+    .tool-call {
+      margin-top: 6px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 10px;
+      font-size: 0.75rem;
+      background: var(--surface);
+    }
+    .tool-call-name { font-weight: 600; }
+    .btn[disabled] { opacity: 0.45; pointer-events: none; }
+    @media (max-width: 1100px) {
+      .ai-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body class="app-shell">
+  <div id="app">
+    <app-shell page="ai-lab" title="AI Lab">
+      <template #topbar-right>
+        <button class="btn btn-ghost btn-icon" data-theme-toggle title="Toggle theme">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12a5 5 0 010-10 5 5 0 000 10z"/></svg>
+        </button>
+      </template>
+
+      <section class="card">
+        <div class="card-header">
+          <h3>On-device model status</h3>
+          <button class="btn btn-sm btn-ghost" @click="refreshStatus">Refresh</button>
+        </div>
+        <div class="card-body">
+          <div class="status-row"><span class="badge" :class="status.badgeClass">{{ status.badgeText }}</span></div>
+          <div class="status-detail text-sm text-muted" v-html="status.detailHtml"></div>
+        </div>
+      </section>
+
+      <section class="ai-grid">
+        <div class="card">
+          <div class="card-header"><h3>Generate</h3><span class="badge badge-current">one-shot text</span></div>
+          <div class="card-body">
+            <div class="field">
+              <label>Prompt</label>
+              <textarea class="textarea" v-model="gen.prompt"></textarea>
+            </div>
+            <div class="form-grid" style="margin-top:10px">
+              <div class="field"><label>Instructions</label><input class="input" v-model="gen.instructions" /></div>
+              <div class="field"><label>Max tokens</label><input class="input" type="number" min="1" v-model.number="gen.maxTokens" /></div>
+            </div>
+            <div class="ai-actions">
+              <button class="btn btn-primary" :disabled="!status.available" :title="status.available ? '' : 'AI unavailable'" @click="runGenerate">Generate</button>
+              <span class="text-sm text-muted">{{ gen.elapsedS != null ? gen.elapsedS + 's' : '' }}</span>
+            </div>
+            <pre class="ai-out" :class="{ error: gen.isError, placeholder: gen.isPlaceholder }">{{ gen.out }}</pre>
+            <div class="ai-meta">{{ gen.meta }}</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>GenerateObject</h3><span class="badge badge-current">structured output</span></div>
+          <div class="card-body">
+            <div class="field">
+              <label>Schema preset</label>
+              <select class="select" v-model="obj.schemaKey">
+                <option value="tagger">Invoice tagger</option>
+                <option value="summary">Appointment summary</option>
+              </select>
+            </div>
+            <div class="field" style="margin-top:10px">
+              <label>Prompt</label>
+              <textarea class="textarea" v-model="obj.prompt"></textarea>
+            </div>
+            <div class="field" style="margin-top:10px">
+              <label>Schema</label>
+              <pre class="ai-out slim">{{ objSchemaJson }}</pre>
+            </div>
+            <div class="ai-actions">
+              <button class="btn btn-primary" :disabled="!status.available" :title="status.available ? '' : 'AI unavailable'" @click="runObject">Run</button>
+              <span class="text-sm text-muted">{{ obj.elapsedS != null ? obj.elapsedS + 's' : '' }}</span>
+            </div>
+            <pre class="ai-out" :class="{ error: obj.isError, placeholder: obj.isPlaceholder }">{{ obj.out }}</pre>
+            <div class="ai-meta">{{ obj.meta }}</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Stream</h3><span class="badge badge-current">token deltas</span></div>
+          <div class="card-body">
+            <div class="field">
+              <label>Prompt</label>
+              <textarea class="textarea" v-model="stream.prompt"></textarea>
+            </div>
+            <div class="ai-actions">
+              <button class="btn btn-primary" :disabled="!status.available" :title="status.available ? '' : 'AI unavailable'" @click="runStream">Stream</button>
+              <button class="btn" :disabled="!stream.running" @click="cancelStream">Cancel</button>
+              <span class="text-sm text-muted">{{ stream.elapsedS != null ? stream.elapsedS + 's' : '' }}</span>
+              <span class="badge" :class="stream.stateClass" v-if="stream.stateText">{{ stream.stateText }}</span>
+            </div>
+            <pre class="ai-out" :class="{ error: stream.isError, placeholder: stream.isPlaceholder }">{{ stream.out }}</pre>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Tools</h3><span class="badge badge-current">model calls your JS</span></div>
+          <div class="card-body">
+            <div class="field">
+              <label>Prompt</label>
+              <textarea class="textarea" v-model="tool.prompt"></textarea>
+            </div>
+            <div class="field-hint">Tools: <span class="text-mono">today</span> (ISO date + weekday) · <span class="text-mono">format_eur</span> (Italian-locale EUR formatting)</div>
+            <div class="ai-actions">
+              <button class="btn btn-primary" :disabled="!status.available" :title="status.available ? '' : 'AI unavailable'" @click="runTools">Run with tools</button>
+              <span class="text-sm text-muted">{{ tool.elapsedS != null ? tool.elapsedS + 's' : '' }}</span>
+            </div>
+            <pre class="ai-out" :class="{ error: tool.isError, placeholder: tool.isPlaceholder }">{{ tool.out }}</pre>
+            <div>
+              <div class="tool-call" v-for="(call, i) in tool.calls" :key="i">
+                <div class="tool-call-name">{{ call.name }}</div>
+                <div class="text-muted">args: {{ JSON.stringify(call.arguments) }}</div>
+                <div v-if="call.error != null" style="color:var(--danger)">error: {{ call.error }}</div>
+                <div v-else style="color:var(--success)">result: {{ JSON.stringify(call.result) }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </app-shell>
+  </div>
+
+  <script src="../vendor/vue.global.js"></script>
+  <script src="../js/theme.js"></script>
+  <script type="module">
+    import { AppShell } from '../js/components/app-shell.js';
+
+    const SCHEMAS = {
+      tagger: {
+        type: 'object',
+        properties: {
+          customer: { type: 'string', description: 'Customer name extracted from the text' },
+          kind: { type: 'string', enum: ['services', 'products', 'consulting', 'training', 'maintenance', 'other'], description: 'Kind of work' },
+          netAmountEur: { type: 'number', description: 'Net amount in euros' },
+          vatRatePct: { type: 'integer', minimum: 0, maximum: 22, description: 'VAT rate applied, percent' },
+          tags: { type: 'array', items: { type: 'string' }, maxItems: 6, description: 'Short topical tags' },
+        },
+        required: ['customer', 'kind', 'netAmountEur', 'vatRatePct', 'tags'],
+      },
+      summary: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['income-tax', 'inarcassa', 'vat', 'top-up'], description: 'Appointment type' },
+          dueDate: { type: 'string', description: 'Due date as yyyy-mm-dd' },
+          quarter: { type: 'integer', minimum: 1, maximum: 4, description: 'Fiscal quarter, if mentioned' },
+          amountEur: { type: 'number', description: 'Amount due in euros' },
+          notes: { type: 'string', description: 'One-line plain-text summary' },
+        },
+        required: ['type', 'dueDate', 'amountEur', 'notes'],
+      },
+    };
+
+    // Not part of Vue's reactive state — a live stream handle, same role as
+    // the plain `let stream = null` in the pre-conversion app.js.
+    let activeStream = null;
+
+    const { createApp } = Vue;
+    createApp({
+      components: { AppShell },
+      data() {
+        return {
+          status: { available: false, badgeClass: 'badge-excluded', badgeText: 'Checking…', detailHtml: 'Querying shell.ai.info()…' },
+          gen: {
+            prompt: 'Summarise this note in one line: I invoiced TechLab Srl 3,500 EUR plus 22% VAT in June, then spent 200 EUR on hosting and 340 on Adobe. 70% of the invoice is already paid.',
+            instructions: 'Answer briefly and in plain text.',
+            maxTokens: 200,
+            out: 'Result appears here.', isError: false, isPlaceholder: true, meta: '', elapsedS: null,
+          },
+          obj: {
+            schemaKey: 'tagger',
+            prompt: 'Tag this invoice: Consultancy for TechLab Srl, 12 hours at 120 EUR/h, invoiced in June with 22% VAT, invoice INV-2025-011.',
+            out: 'Result appears here.', isError: false, isPlaceholder: true, meta: '', elapsedS: null,
+          },
+          stream: {
+            prompt: 'Write a short haiku about paying taxes.',
+            out: 'Deltas appear here as they arrive.', isError: false, isPlaceholder: true,
+            running: false, stateText: '', stateClass: '', elapsedS: null,
+          },
+          tool: {
+            prompt: "What is today's date, and what does 3500,50 look like formatted as euros?",
+            out: 'Result appears here.', isError: false, isPlaceholder: true, elapsedS: null, calls: [],
+          },
+        };
+      },
+      computed: {
+        objSchemaJson() {
+          return JSON.stringify(SCHEMAS[this.obj.schemaKey], null, 2);
+        },
+      },
+      methods: {
+        formatEUR: window.FiscoDesk.formatEUR,
+
+        async refreshStatus() {
+          if (!window.shell || !window.shell.ai) {
+            this.status = {
+              available: false, badgeClass: 'badge-excluded', badgeText: 'No shell',
+              detailHtml: 'window.shell.ai is not available — open this page inside the app-ly shell.',
+            };
+            return;
+          }
+          const info = await window.shell.ai.info();
+          this.status.available = info.available;
+          this.status.badgeClass = info.available ? 'badge-open' : 'badge-excluded';
+          this.status.badgeText = info.available ? 'Available' : 'Unavailable';
+
+          const bits = [];
+          if (info.reason) bits.push('reason: <span class="text-mono">' + info.reason + '</span>');
+          if (info.detail) bits.push('<span>' + info.detail + '</span>');
+          if (Array.isArray(info.models) && info.models.length) {
+            bits.push('model: <span class="text-mono">' + info.models.map((m) => m.id + (m.default ? ' (default)' : '')).join(', ') + '</span>');
+          }
+          const feats = info.features || {};
+          const on = Object.keys(feats).filter((k) => feats[k]);
+          bits.push('features: ' + (on.length ? on.map((k) => '<span class="badge badge-open">' + k + '</span>').join(' ') : 'none'));
+          this.status.detailHtml = bits.join(' &nbsp;·&nbsp; ');
+        },
+
+        async runGenerate() {
+          this.gen.out = 'Generating…'; this.gen.isError = false; this.gen.isPlaceholder = false; this.gen.meta = ''; this.gen.elapsedS = null;
+          const t0 = performance.now();
+          try {
+            const { text, model, toolCalls } = await window.shell.ai.generate(this.gen.prompt, {
+              instructions: this.gen.instructions || undefined,
+              maxTokens: this.gen.maxTokens || undefined,
+            });
+            this.gen.out = text; this.gen.isError = false;
+            this.gen.meta = 'model ' + model + ' · ' + (toolCalls ? toolCalls.length : 0) + ' tool calls';
+          } catch (e) {
+            this.gen.out = String(e); this.gen.isError = true;
+          }
+          this.gen.elapsedS = ((performance.now() - t0) / 1000).toFixed(1);
+        },
+
+        async runObject() {
+          this.obj.out = 'Generating…'; this.obj.isError = false; this.obj.isPlaceholder = false; this.obj.meta = ''; this.obj.elapsedS = null;
+          const t0 = performance.now();
+          try {
+            const { object, model, toolCalls } = await window.shell.ai.generateObject(
+              this.obj.prompt,
+              SCHEMAS[this.obj.schemaKey],
+              { maxTokens: 300 },
+            );
+            this.obj.out = JSON.stringify(object, null, 2); this.obj.isError = false;
+            this.obj.meta = 'model ' + model + ' · ' + (toolCalls ? toolCalls.length : 0) + ' tool calls';
+          } catch (e) {
+            this.obj.out = String(e); this.obj.isError = true;
+          }
+          this.obj.elapsedS = ((performance.now() - t0) / 1000).toFixed(1);
+        },
+
+        async runStream() {
+          this.stream.out = ''; this.stream.isError = false; this.stream.isPlaceholder = false;
+          this.stream.elapsedS = null; this.stream.running = true;
+          this.stream.stateText = 'streaming'; this.stream.stateClass = 'badge-current';
+          const t0 = performance.now();
+          try {
+            activeStream = await window.shell.ai.stream(this.stream.prompt);
+            let text = '';
+            activeStream.onText((delta) => {
+              text += delta;
+              this.stream.out = text;
+            });
+            await activeStream.completed;
+            this.stream.stateText = 'done'; this.stream.stateClass = 'badge-open';
+          } catch (e) {
+            this.stream.stateText = 'cancelled / error'; this.stream.stateClass = 'badge-excluded';
+            if (this.stream.out === '') { this.stream.out = String(e); this.stream.isError = true; }
+          } finally {
+            activeStream = null;
+            this.stream.running = false;
+            this.stream.elapsedS = ((performance.now() - t0) / 1000).toFixed(1);
+          }
+        },
+
+        cancelStream() {
+          if (activeStream) activeStream.cancel();
+        },
+
+        async runTools() {
+          this.tool.calls = [];
+          this.tool.out = 'Generating…'; this.tool.isError = false; this.tool.isPlaceholder = false; this.tool.elapsedS = null;
+          const t0 = performance.now();
+          try {
+            const { text, model, toolCalls } = await window.shell.ai.generate(this.tool.prompt, {
+              tools: [
+                {
+                  name: 'today',
+                  description: "Return today's date as ISO yyyy-mm-dd and the weekday name.",
+                  parameters: { type: 'object', properties: {} },
+                  handler: () => {
+                    const d = new Date();
+                    return { iso: d.toISOString().slice(0, 10), weekday: d.toLocaleDateString('en-GB', { weekday: 'long' }) };
+                  },
+                },
+                {
+                  name: 'format_eur',
+                  description: 'Format a numeric amount in euros using the Italian locale.',
+                  parameters: { type: 'object', properties: { amount: { type: 'number', description: 'Amount in euros' } }, required: ['amount'] },
+                  handler: ({ amount }) => window.FiscoDesk.formatEUR(Number(amount) || 0),
+                },
+              ],
+            });
+            this.tool.out = text + '\n\n— model: ' + model; this.tool.isError = false;
+            this.tool.calls = toolCalls || [];
+          } catch (e) {
+            this.tool.out = String(e); this.tool.isError = true;
+          }
+          this.tool.elapsedS = ((performance.now() - t0) / 1000).toFixed(1);
+        },
+      },
+      mounted() {
+        this.refreshStatus();
+      },
+    }).mount('#app');
+  </script>
+</body>
+</html>

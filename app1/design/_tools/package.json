@@ -1,0 +1,9 @@
+{
+  "name": "fiscodesk-design-tools",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only scripts for checking the design/ prototype. Not part of the app build.",
+  "dependencies": {
+    "playwright": "^1.62.1"
+  }
+}

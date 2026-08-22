@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tax Appointments — FiscoDesk</title>
+  <link rel="stylesheet" href="../css/common.css" />
+  <style>#app { display: contents; }</style>
+</head>
+<body class="app-shell">
+  <div id="app">
+    <app-shell page="tax-appointments" title="Tax Appointments">
+      <template #topbar-right>
+        <label class="text-sm text-muted" style="display:flex;align-items:center;gap:6px">
+          <input type="checkbox" v-model="includeNextFy" /> Include next FY
+        </label>
+        <select class="select select-sm" aria-label="Fiscal year" v-model="fyFilter">
+          <option value="2025">FY 2025</option>
+          <option value="2024">FY 2024</option>
+          <option value="2023">FY 2023</option>
+        </select>
+        <button class="btn btn-ghost btn-icon" data-theme-toggle title="Toggle theme"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12a5 5 0 010-10 5 5 0 000 10z"/></svg></button>
+      </template>
+
+      <div class="toolbar">
+        <p class="text-muted text-sm">Showing appointments for <strong>FY {{ fyFilter }}</strong> · toggle “Include next FY” to plan ahead</p>
+        <div class="toolbar-spacer"></div>
+        <button class="btn btn-sm">Export CSV</button>
+        <button class="btn btn-sm">Export PDF</button>
+        <button class="btn btn-primary" @click="addAppointment">New Appointment</button>
+      </div>
+
+      <div class="calendar-layout">
+        <div class="card">
+          <div class="card-body calendar">
+            <div class="calendar-header">
+              <button class="btn btn-sm btn-ghost" @click="calPrev">←</button>
+              <strong>{{ calLabel }}</strong>
+              <button class="btn btn-sm btn-ghost" @click="calNext">→</button>
+            </div>
+            <div class="calendar-grid">
+              <div class="cal-dow">Mo</div><div class="cal-dow">Tu</div><div class="cal-dow">We</div><div class="cal-dow">Th</div><div class="cal-dow">Fr</div><div class="cal-dow">Sa</div><div class="cal-dow">Su</div>
+              <div class="cal-day other">26</div><div class="cal-day other">27</div><div class="cal-day other">28</div><div class="cal-day other">29</div><div class="cal-day other">30</div><div class="cal-day other">31</div><div class="cal-day">1</div>
+              <div class="cal-day">2</div><div class="cal-day">3</div><div class="cal-day">4</div><div class="cal-day">5</div><div class="cal-day">6</div><div class="cal-day">7</div><div class="cal-day">8</div>
+              <div class="cal-day">9</div><div class="cal-day">10</div><div class="cal-day">11</div><div class="cal-day">12</div><div class="cal-day">13</div><div class="cal-day">14</div><div class="cal-day">15</div>
+              <div class="cal-day today has-event">16</div><div class="cal-day">17</div><div class="cal-day">18</div><div class="cal-day">19</div><div class="cal-day has-event">20</div><div class="cal-day">21</div><div class="cal-day">22</div>
+              <div class="cal-day">23</div><div class="cal-day">24</div><div class="cal-day">25</div><div class="cal-day">26</div><div class="cal-day">27</div><div class="cal-day">28</div><div class="cal-day">29</div>
+              <div class="cal-day">30</div><div class="cal-day other">1</div><div class="cal-day other">2</div><div class="cal-day other">3</div><div class="cal-day other">4</div><div class="cal-day other">5</div><div class="cal-day other">6</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="col-required">Date</th>
+                <th class="col-required">Type</th>
+                <th class="col-required num">Amount</th>
+                <th class="col-required">Status</th>
+                <th class="col-required">FY</th>
+                <th>Notes</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="a in visibleAppointments" :key="a.id">
+                <td>
+                  <template v-if="editing === a.id">
+                    <input class="input input-sm" type="date" v-model="a.date" />
+                  </template>
+                  <template v-else>{{ formatDate(a.date) }}</template>
+                </td>
+                <td>
+                  <template v-if="editing === a.id">
+                    <select class="select select-sm" v-model="a.type">
+                      <option>Tax</option>
+                      <option>Inarcassa</option>
+                      <option>VAT</option>
+                      <option>Top-up</option>
+                      <option>Other</option>
+                    </select>
+                  </template>
+                  <template v-else>{{ a.type }}</template>
+                </td>
+                <td class="num">
+                  <template v-if="editing === a.id">
+                    <input class="input input-sm" type="number" v-model.number="a.amount" />
+                  </template>
+                  <template v-else>{{ formatEUR(a.amount) }}</template>
+                </td>
+                <td>
+                  <template v-if="editing === a.id">
+                    <select class="select select-sm" v-model="a.status">
+                      <option>Current</option>
+                      <option>Planned</option>
+                    </select>
+                  </template>
+                  <template v-else><span :class="'badge badge-' + a.status.toLowerCase()">{{ a.status }}</span></template>
+                </td>
+                <td>
+                  <template v-if="editing === a.id">
+                    <select class="select select-sm" v-model="a.fy">
+                      <option value="2025">2025</option>
+                      <option value="2026">2026</option>
+                      <option value="2024">2024</option>
+                    </select>
+                  </template>
+                  <template v-else><span class="badge badge-fy">FY {{ a.fy }}</span></template>
+                </td>
+                <td>
+                  <template v-if="editing === a.id">
+                    <textarea class="input input-sm" v-model="a.notes"></textarea>
+                  </template>
+                  <template v-else><span class="text-muted">{{ a.notes }}</span></template>
+                </td>
+                <td class="actions">
+                  <template v-if="editing === a.id">
+                    <button type="button" class="btn btn-sm btn-primary" @click="editing = null">Save</button>
+                    <button type="button" class="btn btn-sm" @click="editing = null">Cancel</button>
+                  </template>
+                  <template v-else>
+                    <button type="button" :class="a.status === 'Current' ? 'btn btn-sm btn-primary' : 'btn btn-sm btn-ghost'" @click="markPaid(a)">Mark Paid</button>
+                    <button type="button" class="btn btn-sm btn-ghost" @click="editing = a.id">Edit</button>
+                  </template>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </app-shell>
+  </div>
+
+  <script src="../vendor/vue.global.js"></script>
+  <script src="../js/theme.js"></script>
+  <script type="module">
+    import { AppShell } from '../js/components/app-shell.js';
+    const { createApp } = Vue;
+    createApp({
+      components: { AppShell },
+      data() {
+        return {
+          editing: null,
+          includeNextFy: false,
+          fyFilter: '2025',
+          calMonthIdx: 5,
+          calYear: 2025,
+          months: ['January','February','March','April','May','June','July','August','September','October','November','December'],
+          appointments: [
+            { id: '2025-07-16-Tax', date: '2025-07-16', type: 'Tax', amount: 1828.13, status: 'Current', fy: '2025', notes: 'Q2 income tax' },
+            { id: '2025-08-20-Inarcassa', date: '2025-08-20', type: 'Inarcassa', amount: 1340.63, status: 'Planned', fy: '2025', notes: 'Q2 social security' },
+            { id: '2025-10-16-Tax', date: '2025-10-16', type: 'Tax', amount: 1950, status: 'Planned', fy: '2025', notes: 'Q3 income tax' },
+            { id: '2026-01-16-Tax', date: '2026-01-16', type: 'Tax', amount: 2100, status: 'Planned', fy: '2026', notes: 'Q4 income tax (next FY)' },
+          ],
+        };
+      },
+      computed: {
+        calLabel() {
+          return this.months[this.calMonthIdx] + ' ' + this.calYear;
+        },
+        visibleAppointments() {
+          return this.appointments.filter((a) =>
+            a.fy === this.fyFilter || (this.includeNextFy && Number(a.fy) === Number(this.fyFilter) + 1)
+          );
+        },
+      },
+      methods: {
+        formatEUR: window.FiscoDesk.formatEUR,
+        formatDate(iso) {
+          const [y, m, d] = iso.split('-');
+          return d + '/' + m + '/' + y;
+        },
+        calPrev() {
+          this.calMonthIdx--;
+          if (this.calMonthIdx < 0) { this.calMonthIdx = 11; this.calYear--; }
+        },
+        calNext() {
+          this.calMonthIdx++;
+          if (this.calMonthIdx > 11) { this.calMonthIdx = 0; this.calYear++; }
+        },
+        markPaid(a) {
+          a.status = 'Current';
+        },
+        addAppointment() {
+          const id = 'new-' + Date.now();
+          this.appointments.unshift({
+            id, date: '', type: 'Tax', amount: 0, status: 'Planned', fy: this.fyFilter, notes: '',
+          });
+          this.editing = id;
+        },
+      },
+    }).mount('#app');
+  </script>
+</body>
+</html>

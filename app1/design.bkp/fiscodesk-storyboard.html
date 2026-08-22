@@ -1,0 +1,201 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FiscoDesk — Storyboard</title>
+  <link rel="stylesheet" href="css/common.css" />
+</head>
+<body>
+  <div class="storyboard">
+    <header class="storyboard-header">
+      <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:16px">
+        <div>
+          <h1>FiscoDesk</h1>
+          <p class="text-muted">Italian freelancer invoice & tax management — desktop Tauri inner UI prototype</p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="badge badge-open">8 screens</span>
+          <button class="btn btn-ghost btn-sm" data-theme-toggle title="Toggle theme">Theme</button>
+          <a class="btn btn-primary btn-sm" href="views/dashboard.html">Open app →</a>
+        </div>
+      </div>
+      <p class="text-sm text-muted" style="margin-top:12px">English UI · Italian locale (€) · Light/dark · Shared <code class="text-mono">css/common.css</code></p>
+    </header>
+
+    <section class="screen-grid">
+      <a class="screen-card" href="views/dashboard.html">
+        <div class="screen-preview">
+          <div class="screen-preview-inner">
+            <div class="preview-sidebar"></div>
+            <div class="preview-main">
+              <div class="preview-topbar"></div>
+              <div class="preview-content">
+                <div class="preview-block accent" style="width:40%"></div>
+                <div class="preview-block" style="width:90%"></div>
+                <div class="preview-block" style="width:90%"></div>
+                <div style="display:flex;gap:4px;margin-top:4px">
+                  <div class="preview-block accent" style="flex:1;height:24px"></div>
+                  <div class="preview-block accent" style="flex:1;height:24px"></div>
+                  <div class="preview-block accent" style="flex:1;height:24px"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="screen-card-body">
+          <h3>Dashboard</h3>
+          <p class="text-sm text-muted">Stats, charts, upcoming appointments, payment alerts, quick-action FABs</p>
+          <div class="screen-card-meta">
+            <span class="badge badge-confirmed">Home</span>
+            <span class="badge badge-planned">Charts</span>
+          </div>
+        </div>
+      </a>
+
+      <a class="screen-card" href="views/invoices.html">
+        <div class="screen-preview">
+          <div class="screen-preview-inner">
+            <div class="preview-sidebar"></div>
+            <div class="preview-main">
+              <div class="preview-topbar"></div>
+              <div class="preview-content">
+                <div class="preview-block" style="width:70%;height:6px"></div>
+                <div class="preview-block" style="width:100%;height:40px;margin-top:8px"></div>
+                <div class="preview-block" style="width:100%;height:6px"></div>
+                <div class="preview-block" style="width:100%;height:6px"></div>
+                <div class="preview-block" style="width:100%;height:6px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="screen-card-body">
+          <h3>Invoices</h3>
+          <p class="text-sm text-muted">Filterable table, status badges, paid %, edit drawer, keyboard <kbd class="text-mono">N</kbd></p>
+          <div class="screen-card-meta"><span class="badge badge-current">Main view</span></div>
+        </div>
+      </a>
+
+      <a class="screen-card" href="views/customers.html">
+        <div class="screen-preview">
+          <div class="screen-preview-inner">
+            <div class="preview-sidebar"></div>
+            <div class="preview-main">
+              <div class="preview-topbar"></div>
+              <div class="preview-content">
+                <div class="preview-block" style="width:100%;height:50px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="screen-card-body">
+          <h3>Customers</h3>
+          <p class="text-sm text-muted">CRM-style list with invoice counts and FY totals, create/edit modal</p>
+        </div>
+      </a>
+
+      <a class="screen-card" href="views/tax-regimes.html">
+        <div class="screen-preview">
+          <div class="screen-preview-inner">
+            <div class="preview-sidebar"></div>
+            <div class="preview-main">
+              <div class="preview-topbar"></div>
+              <div class="preview-content">
+                <div class="preview-block" style="width:100%;height:36px"></div>
+                <div class="preview-block" style="width:100%;height:6px"></div>
+                <div class="preview-block" style="width:100%;height:6px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="screen-card-body">
+          <h3>Tax Regimes</h3>
+          <p class="text-sm text-muted">Forfettario / ordinario parameters — tax, inarcassa, VAT, top-up %</p>
+        </div>
+      </a>
+
+      <a class="screen-card" href="views/fiscal-years.html">
+        <div class="screen-preview">
+          <div class="screen-preview-inner">
+            <div class="preview-sidebar"></div>
+            <div class="preview-main">
+              <div class="preview-topbar"></div>
+              <div class="preview-content" style="flex-direction:row;gap:4px">
+                <div class="preview-block accent" style="flex:1;height:60px"></div>
+                <div class="preview-block accent" style="flex:1;height:60px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="screen-card-body">
+          <h3>Fiscal Years</h3>
+          <p class="text-sm text-muted">Year cards with regime, totals, appointments — links to invoices &amp; deadlines</p>
+        </div>
+      </a>
+
+      <a class="screen-card" href="views/tax-appointments.html">
+        <div class="screen-preview">
+          <div class="screen-preview-inner">
+            <div class="preview-sidebar"></div>
+            <div class="preview-main">
+              <div class="preview-topbar"></div>
+              <div class="preview-content" style="flex-direction:row;gap:4px">
+                <div class="preview-block" style="flex:1;height:70px"></div>
+                <div class="preview-block" style="flex:1.4;height:70px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="screen-card-body">
+          <h3>Tax Appointments</h3>
+          <p class="text-sm text-muted">Calendar + list scoped by fiscal year, mark-as-paid, next-FY planning</p>
+        </div>
+      </a>
+
+      <a class="screen-card" href="views/payments.html">
+        <div class="screen-preview">
+          <div class="screen-preview-inner">
+            <div class="preview-sidebar"></div>
+            <div class="preview-main">
+              <div class="preview-topbar"></div>
+              <div class="preview-content">
+                <div style="display:flex;gap:4px;margin-bottom:6px">
+                  <div class="preview-block accent" style="width:40%;height:8px"></div>
+                  <div class="preview-block" style="width:40%;height:8px"></div>
+                </div>
+                <div class="preview-block" style="width:100%;height:40px"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="screen-card-body">
+          <h3>Payments</h3>
+          <p class="text-sm text-muted">Inbound / outbound tabs, unified register, partial payment support</p>
+        </div>
+      </a>
+
+      <a class="screen-card" href="views/reports.html">
+        <div class="screen-preview">
+          <div class="screen-preview-inner">
+            <div class="preview-sidebar"></div>
+            <div class="preview-main">
+              <div class="preview-topbar"></div>
+              <div class="preview-content" style="align-items:center;justify-content:center">
+                <div class="preview-block" style="width:50%;height:30px;opacity:0.4"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="screen-card-body">
+          <h3>Reports</h3>
+          <p class="text-sm text-muted">Future placeholder — per-view CSV/PDF export available now</p>
+          <div class="screen-card-meta"><span class="badge badge-excluded">Coming soon</span></div>
+        </div>
+      </a>
+    </section>
+  </div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

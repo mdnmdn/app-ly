@@ -76,6 +76,7 @@ Files:
 | [`src-tauri/src/process.rs`](src-tauri/src/process.rs) | Allowlisted subprocess execution (`shell_run`, `shell_spawn`, stdin, exit/kill, runtime timeout, allowlist introspection) |
 | [`src-tauri/src/ai.rs`](src-tauri/src/ai.rs) | On-device AI (`shell.ai`): commands, tool bridge, JSON Schema translation, backend selection; backends in [`src-tauri/src/ai/`](src-tauri/src/ai/) (`backend_apple.rs` for macOS + the `ai-apple` feature, `backend_stub.rs` everywhere else) |
 | [`src-tauri/src/menu.rs`](src-tauri/src/menu.rs) | Native app menu (Reload, Open DevTools) |
+| [`src-tauri/src/cli.rs`](src-tauri/src/cli.rs) | Headless CLI (`app-ly ai`, `db`, `file`, `fetch`, `run`, `info`) — no window |
 | [`src-tauri/src/lib.rs`](src-tauri/src/lib.rs) | App setup, `shell://` protocol, window creation, init script, state managers |
 
 See [`_docs/project-structure.md`](_docs/project-structure.md) for the full repo layout, and
@@ -131,6 +132,17 @@ npm install
 npm run tauri dev
 npm run tauri build
 npm run tauri dev -- --config ./path/to/app.toml
+```
+
+Headless CLI (same `app.toml` as the GUI: `--config`, folder containing the `.app`, then
+bundled / cwd fallbacks). `[[allowedCommands]]` gates `run` and is what `ai` may call as
+tools. Invoke the binary, not `open`:
+
+```bash
+app-ly.app/Contents/MacOS/app-ly --help
+app-ly.app/Contents/MacOS/app-ly ai "say hi"
+app-ly --config ./app.toml db query notes.db "select * from notes"
+app-ly run git status
 ```
 
 ## Conventions

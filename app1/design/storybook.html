@@ -1,0 +1,887 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FiscoDesk — Storybook</title>
+  <link rel="stylesheet" href="css/common.css" />
+  <style>
+    /* Page-scoped layout for the storybook only — sticky left TOC + a single
+       scrolling content column. Not part of the shared design system, so it
+       lives here rather than in common.css (mirrors how index.html keeps its
+       own .screen-preview-frame rules local instead of shared). */
+    .story-layout {
+      display: grid;
+      grid-template-columns: 190px 1fr;
+      gap: 32px;
+      align-items: start;
+    }
+    .story-nav {
+      position: sticky;
+      top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+    .story-nav-link {
+      padding: 6px 10px;
+      border-radius: var(--radius);
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.8125rem;
+    }
+    .story-nav-link:hover { background: var(--surface-2); color: var(--fg); }
+    .story-content {
+      display: flex;
+      flex-direction: column;
+      gap: 40px;
+      min-width: 0;
+      padding-bottom: 60px;
+    }
+    .story-section { scroll-margin-top: 20px; }
+    .story-heading { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+    .story-anchor {
+      color: var(--border);
+      text-decoration: none;
+      font-size: 0.8em;
+      opacity: 0;
+      transition: opacity var(--transition);
+    }
+    .story-heading:hover .story-anchor { opacity: 1; }
+    .story-desc { margin-bottom: 14px; max-width: 640px; }
+    .story-demo {
+      border: 1px dashed var(--border);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      background: var(--surface);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .story-demo.column { flex-direction: column; align-items: stretch; }
+    .story-code {
+      margin-top: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      line-height: 1.6;
+      white-space: pre;
+    }
+    .story-swatches {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 10px;
+      width: 100%;
+    }
+    .story-swatch { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .story-swatch-color { height: 44px; }
+    .story-swatch-label {
+      padding: 6px 8px;
+      background: var(--surface);
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+    }
+    @media (max-width: 860px) {
+      .story-layout { grid-template-columns: 1fr; }
+      .story-nav { position: static; flex-direction: row; flex-wrap: wrap; max-height: none; }
+    }
+
+    /* Same live-iframe-preview trick as index.html: render the real page at
+       desktop size, scale it down, so the AppShell demo can never drift from
+       what the component actually looks like. */
+    .screen-preview-frame { width: 100%; height: 100%; overflow: hidden; pointer-events: none; }
+    .screen-preview-frame iframe {
+      width: 1280px;
+      height: 800px;
+      border: 0;
+      transform: scale(0.225);
+      transform-origin: top left;
+    }
+  </style>
+</head>
+<body>
+  <div class="storyboard" id="app">
+    <header class="storyboard-header">
+      <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:16px">
+        <div>
+          <h1>Storybook</h1>
+          <p class="text-muted">
+            Every shared CSS pattern and Vue component FiscoDesk has, live and interactive
+            on one page. Read this before opening a file under <code class="text-mono">js/components/</code>
+            or a real <code class="text-mono">views/*.html</code> — it's meant to be enough on its own
+            to build a new page.
+          </p>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn btn-ghost btn-sm" data-theme-toggle title="Toggle theme">Theme</button>
+          <a class="btn btn-primary btn-sm" href="index.html">← Storyboard</a>
+        </div>
+      </div>
+    </header>
+
+    <div class="story-layout">
+      <story-nav :sections="sections"></story-nav>
+
+      <div class="story-content">
+        <!-- ============================================================
+             DESIGN TOKENS
+             ============================================================ -->
+        <story-section id="tokens" title="Design tokens">
+          <template #desc>
+            CSS custom properties defined in <code class="text-mono">:root</code>, then
+            overridden per theme (<code class="text-mono">[data-theme="dark"]</code>) and
+            per palette (<code class="text-mono">[data-palette="purple|cobalt"]</code>).
+            Never hardcode a color in a view — reference the token so the page follows
+            theme/palette switches automatically.
+          </template>
+          <!-- swatches read the live computed value of each var, so flipping the
+               theme/palette buttons above updates every swatch on this page too -->
+          <div class="story-demo">
+            <div class="story-swatches">
+              <div class="story-swatch" v-for="t in tokens" :key="t">
+                <div class="story-swatch-color" :style="{ background: 'var(' + t + ')' }"></div>
+                <div class="story-swatch-label">{{ t }}</div>
+              </div>
+            </div>
+          </div>
+          <p class="text-sm text-muted" style="margin-top:10px">
+            Non-color tokens: <code class="text-mono">--radius</code> (8px),
+            <code class="text-mono">--radius-lg</code> (12px), <code class="text-mono">--shadow</code>,
+            <code class="text-mono">--sidebar-w</code> (220px), <code class="text-mono">--topbar-h</code> (52px),
+            <code class="text-mono">--font-display</code> / <code class="text-mono">--font-body</code> /
+            <code class="text-mono">--font-mono</code>.
+          </p>
+        </story-section>
+
+        <!-- ============================================================
+             TYPOGRAPHY
+             ============================================================ -->
+        <story-section id="typography" title="Typography">
+          <template #desc>
+            Headings use <code class="text-mono">--font-display</code>, body copy
+            <code class="text-mono">--font-body</code> (same stack today, kept separate
+            in case one gets swapped later). Use the utility classes for anything
+            smaller than body text or de-emphasized — don't hand-roll a font-size.
+          </template>
+          <div class="story-demo column">
+            <h1>Heading 1 — page titles</h1>
+            <h2>Heading 2 — section titles</h2>
+            <h3>Heading 3 — card / subsection titles</h3>
+            <p>Body text — default, 14px, line-height 1.5.</p>
+            <p class="text-muted">.text-muted — secondary copy, captions, hints</p>
+            <p class="text-sm">.text-sm — 13px, dense UI copy (table cells, toolbars)</p>
+            <p class="text-xs">.text-xs — 12px, meta labels</p>
+            <p class="text-mono">.text-mono — 1.234,56 €, IDs, tax codes, tabular figures</p>
+          </div>
+        </story-section>
+
+        <!-- ============================================================
+             BUTTONS
+             ============================================================ -->
+        <story-section id="buttons" title="Buttons">
+          <template #desc>
+            One <code class="text-mono">.btn</code> base, variants layer on top. Default is a
+            bordered neutral button. Use <code class="text-mono">.btn-primary</code> for the one
+            primary action on a view, <code class="text-mono">.btn-ghost</code> for low-emphasis
+            actions inside toolbars/rows, <code class="text-mono">.btn-danger</code> for destructive
+            actions — pair it with a <code class="text-mono">confirm()</code>, see Tables below.
+          </template>
+          <div class="story-demo">
+            <button class="btn">Default</button>
+            <button class="btn btn-primary">Primary</button>
+            <button class="btn btn-ghost">Ghost</button>
+            <button class="btn btn-danger">Danger</button>
+            <button class="btn btn-sm btn-primary">Small</button>
+            <button class="btn btn-icon" title="Icon-only">✕</button>
+          </div>
+          <pre v-pre class="story-code"><code>&lt;button class="btn btn-primary" @click="save"&gt;Save&lt;/button&gt;
+&lt;button class="btn btn-sm btn-ghost" @click="editing = row.id"&gt;Edit&lt;/button&gt;</code></pre>
+        </story-section>
+
+        <!-- ============================================================
+             FORM CONTROLS
+             ============================================================ -->
+        <story-section id="forms" title="Form controls">
+          <template #desc>
+            Plain inputs styled to match, plus <code class="text-mono">.field</code> for the
+            label+hint wrapper and <code class="text-mono">.form-grid</code> for a responsive
+            2-column layout (<code class="text-mono">.span-2</code> makes one field full-width).
+            There's no separate "controlled input" component — the native element plus
+            <code class="text-mono">v-model</code> is the whole story.
+          </template>
+          <div class="story-demo column">
+            <div class="form-grid">
+              <div class="field">
+                <label class="required">Description</label>
+                <input class="input" v-model="demoField" placeholder="e.g. Consulting — March" />
+              </div>
+              <div class="field">
+                <label>Regime</label>
+                <select class="select">
+                  <option>Forfettario</option>
+                  <option>Ordinario</option>
+                </select>
+              </div>
+              <div class="field span-2">
+                <label>Notes</label>
+                <textarea class="textarea" placeholder="Optional"></textarea>
+                <span class="field-hint">Shown to the customer on the PDF export.</span>
+              </div>
+            </div>
+            <p class="text-sm">Live <code class="text-mono">v-model</code> value: <strong class="text-mono">{{ demoField || '(empty)' }}</strong></p>
+          </div>
+          <pre v-pre class="story-code"><code>&lt;div class="field"&gt;
+  &lt;label class="required"&gt;Description&lt;/label&gt;
+  &lt;input class="input" v-model="row.description" /&gt;
+&lt;/div&gt;</code></pre>
+        </story-section>
+
+        <!-- ============================================================
+             COMPLETE FORM EXAMPLE — every field type in one real form
+             ============================================================ -->
+        <story-section id="form-example" title="Complete form example">
+          <template #desc>
+            A full "New invoice" form using every field type the design system has,
+            including two that no real view happens to use yet:
+            <code class="text-mono">.input-required</code>/<code class="text-mono">.select-required</code>
+            (an accent-colored left border + red <code class="text-mono">:invalid</code> state
+            for HTML5-required fields) and a radio group. Copy this section wholesale for any
+            new create/edit form instead of assembling one field at a time.
+          </template>
+          <!-- native HTML5 validation, not a JS validation library: `required` + `type="number"`
+               on the inputs, `.input-required`/`.select-required` for the visual marker, and
+               :invalid in common.css turns the border red once a required field is touched
+               and left empty. @submit.prevent stops the browser from navigating away, then
+               the native reportValidity() (via the form's own "Save" submit) does the rest. -->
+          <div class="story-demo column">
+            <form class="form-grid" @submit.prevent="submitDemoForm" novalidate>
+              <div class="field">
+                <label class="required">Customer</label>
+                <select class="select select-required" v-model="demoForm.customer" required>
+                  <option value="" disabled>Choose a customer…</option>
+                  <option>TechLab Srl</option>
+                  <option>Studio Rossi</option>
+                </select>
+              </div>
+              <div class="field">
+                <label class="required">Invoice number</label>
+                <input class="input input-required" v-model="demoForm.number" required placeholder="2025-014" />
+              </div>
+              <div class="field span-2">
+                <label class="required">Description</label>
+                <input class="input input-required" v-model="demoForm.description" required placeholder="Service description" />
+              </div>
+              <div class="field">
+                <label class="required">Issue date</label>
+                <input class="input input-required" type="date" v-model="demoForm.issueDate" required />
+              </div>
+              <div class="field">
+                <label>Due date</label>
+                <input class="input" type="date" v-model="demoForm.dueDate" />
+                <span class="field-hint">Defaults to 30 days if left empty.</span>
+              </div>
+              <div class="field">
+                <label class="required">Taxable amount</label>
+                <input class="input input-required" type="number" step="0.01" min="0" v-model.number="demoForm.taxable" required placeholder="0.00" />
+              </div>
+              <div class="field">
+                <label>Payment terms</label>
+                <select class="select" v-model="demoForm.terms">
+                  <option>Due on receipt</option>
+                  <option>Net 30</option>
+                  <option>Net 60</option>
+                </select>
+              </div>
+              <div class="field span-2">
+                <label>Status</label>
+                <div style="display:flex;gap:16px;padding-top:6px">
+                  <label style="display:flex;align-items:center;gap:6px;font-weight:400;color:var(--fg)">
+                    <input type="radio" value="draft" v-model="demoForm.status" /> Draft
+                  </label>
+                  <label style="display:flex;align-items:center;gap:6px;font-weight:400;color:var(--fg)">
+                    <input type="radio" value="sent" v-model="demoForm.status" /> Send now
+                  </label>
+                </div>
+              </div>
+              <div class="field span-2">
+                <label>Notes</label>
+                <textarea class="textarea" v-model="demoForm.notes" placeholder="Optional, shown on the PDF"></textarea>
+              </div>
+              <div class="field span-2">
+                <label style="display:flex;align-items:center;gap:6px;font-weight:400;color:var(--fg)">
+                  <input type="checkbox" v-model="demoForm.sendCopy" /> Send me a copy
+                </label>
+              </div>
+              <div class="field span-2" style="display:flex;gap:8px;justify-content:flex-end;padding-top:4px">
+                <button type="button" class="btn" @click="resetDemoForm">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save invoice</button>
+              </div>
+            </form>
+            <p class="text-sm text-muted" v-if="demoFormSubmitted">
+              Submitted — live values: <code class="text-mono">{{ JSON.stringify(demoForm) }}</code>
+            </p>
+          </div>
+          <pre v-pre class="story-code"><code>&lt;form class="form-grid" @submit.prevent="save" novalidate&gt;
+  &lt;div class="field"&gt;
+    &lt;label class="required"&gt;Customer&lt;/label&gt;
+    &lt;select class="select select-required" v-model="form.customer" required&gt;...&lt;/select&gt;
+  &lt;/div&gt;
+  &lt;div class="field span-2"&gt;
+    &lt;label&gt;Status&lt;/label&gt;
+    &lt;label&gt;&lt;input type="radio" value="draft" v-model="form.status" /&gt; Draft&lt;/label&gt;
+    &lt;label&gt;&lt;input type="radio" value="sent" v-model="form.status" /&gt; Send now&lt;/label&gt;
+  &lt;/div&gt;
+  &lt;button type="submit" class="btn btn-primary"&gt;Save&lt;/button&gt;
+&lt;/form&gt;</code></pre>
+        </story-section>
+
+        <!-- ============================================================
+             BADGES
+             ============================================================ -->
+        <story-section id="badges" title="Badges">
+          <template #desc>
+            Status pills. Pick by meaning, not color —
+            <code class="text-mono">confirmed</code>/<code class="text-mono">open</code> and
+            <code class="text-mono">planned</code> both read "good",
+            <code class="text-mono">closed</code>/<code class="text-mono">excluded</code> read
+            neutral/inactive, <code class="text-mono">current</code> flags "in progress right now",
+            <code class="text-mono">fy</code> is the mono-font fiscal-year tag next to amounts.
+          </template>
+          <div class="story-demo">
+            <span class="badge badge-confirmed">Confirmed</span>
+            <span class="badge badge-planned">Planned</span>
+            <span class="badge badge-open">Open</span>
+            <span class="badge badge-closed">Closed</span>
+            <span class="badge badge-current">Current</span>
+            <span class="badge badge-excluded">Legacy</span>
+            <span class="badge badge-fy">FY 2025</span>
+          </div>
+        </story-section>
+
+        <!-- ============================================================
+             CARDS & STATS
+             ============================================================ -->
+        <story-section id="cards" title="Cards & stats">
+          <template #desc>
+            <code class="text-mono">.card</code> is the generic container
+            (<code class="text-mono">.card-header</code> + <code class="text-mono">.card-body</code>).
+            <code class="text-mono">.stats-row</code>/<code class="text-mono">.stat-card</code> is the
+            dashboard KPI-tile pattern: label, big mono number, optional delta.
+          </template>
+          <div class="story-demo column">
+            <div class="card" style="max-width:360px">
+              <div class="card-header"><h3>Quarterly summary</h3><button class="btn btn-sm btn-ghost">Export</button></div>
+              <div class="card-body"><p class="text-sm text-muted">Card body — any content goes here.</p></div>
+            </div>
+            <div class="stats-row" style="grid-template-columns:repeat(3,1fr)">
+              <div class="stat-card">
+                <div class="stat-label">Invoiced YTD</div>
+                <div class="stat-value">{{ formatEUR(48200) }}</div>
+                <div class="stat-delta positive">+12% vs last year</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Open invoices</div>
+                <div class="stat-value">4</div>
+                <div class="stat-delta">2 overdue</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Tax set aside</div>
+                <div class="stat-value">{{ formatEUR(11430) }}</div>
+              </div>
+            </div>
+          </div>
+        </story-section>
+
+        <!-- ============================================================
+             TABLES — the v-for editable-row pattern
+             ============================================================ -->
+        <story-section id="tables" title="Tables — editable rows">
+          <template #desc>
+            The pattern that replaced the old <code class="text-mono">data-inline-table</code> +
+            app.js DOM-sync: a plain array in <code class="text-mono">data()</code>, one
+            <code class="text-mono">v-for</code> row, and an <code class="text-mono">editing</code>
+            field holding the key of whichever row is currently open for edit. Click Edit — it's live.
+          </template>
+          <!-- editing is keyed by row.id here; use whatever's actually unique on the
+               real row (invoice number, tax code) rather than array index, so an
+               open edit survives a re-sort or filter -->
+          <div class="story-demo column">
+            <div class="toolbar">
+              <span class="toolbar-spacer"></span>
+              <button class="btn btn-sm btn-primary" @click="addDemoRow">+ New row</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Description</th><th class="num">Amount</th><th class="actions">Actions</th></tr></thead>
+                <tbody>
+                  <tr v-for="row in demoRows" :key="row.id" :class="{ 'is-editing': editingRow === row.id }">
+                    <td>
+                      <input v-if="editingRow === row.id" class="input-inline" v-model="row.description" />
+                      <span v-else>{{ row.description }}</span>
+                    </td>
+                    <td class="num">
+                      <input v-if="editingRow === row.id" class="input-inline" type="number" v-model.number="row.amount" />
+                      <span v-else>{{ formatEUR(row.amount) }}</span>
+                    </td>
+                    <td class="actions">
+                      <template v-if="editingRow === row.id">
+                        <button class="btn btn-sm btn-primary" @click="editingRow = null">Save</button>
+                      </template>
+                      <template v-else>
+                        <button class="btn btn-sm btn-ghost" @click="editingRow = row.id">Edit</button>
+                        <button class="btn btn-sm btn-danger" @click="removeDemoRow(row.id)">Delete</button>
+                      </template>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <pre v-pre class="story-code"><code>&lt;tr v-for="row in rows" :key="row.id"&gt;
+  &lt;td&gt;
+    &lt;input v-if="editing === row.id" class="input-inline" v-model="row.description" /&gt;
+    &lt;span v-else&gt;{{ row.description }}&lt;/span&gt;
+  &lt;/td&gt;
+  &lt;td class="actions"&gt;
+    &lt;button v-if="editing === row.id" class="btn btn-sm btn-primary" @click="editing = null"&gt;Save&lt;/button&gt;
+    &lt;button v-else class="btn btn-sm btn-ghost" @click="editing = row.id"&gt;Edit&lt;/button&gt;
+  &lt;/td&gt;
+&lt;/tr&gt;
+
+// delete: a one-line confirm() in a method, not a data-confirm attribute
+removeRow(id) {
+  if (confirm('Delete this row?')) this.rows = this.rows.filter(r =&gt; r.id !== id);
+}</code></pre>
+        </story-section>
+
+        <!-- ============================================================
+             CARD GRID — the fiscal-years alternative to a table
+             ============================================================ -->
+        <story-section id="card-grid" title="Card grid — view/edit toggle">
+          <template #desc>
+            Alternative to a table when rows are visually rich (fiscal-years). Same
+            <code class="text-mono">editing</code>-key idea, but each card toggles between a
+            view block and an edit form instead of swapping table cells.
+          </template>
+          <!-- in the real fiscal-years.html, cancelling a brand-new card (isNew: true)
+               discards it entirely; cancelling an existing card just closes the form
+               and keeps whatever was already saved — this demo omits the "new card"
+               half to stay short, see views/fiscal-years.html for the full version -->
+          <div class="story-demo">
+            <div class="fy-grid" style="width:100%">
+              <div class="fy-card" v-for="card in demoCards" :key="card.id" :class="{ 'is-editing': editingCard === card.id }">
+                <template v-if="editingCard !== card.id">
+                  <div class="fy-year">{{ card.year }}</div>
+                  <p class="text-sm text-muted">{{ card.note }}</p>
+                  <div class="fy-card-actions">
+                    <button class="btn btn-sm btn-ghost" @click="editingCard = card.id">Edit</button>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="form-grid">
+                    <div class="field"><label>Year</label><input class="input input-sm" v-model="card.year" /></div>
+                    <div class="field span-2"><label>Note</label><input class="input input-sm" v-model="card.note" /></div>
+                  </div>
+                  <div class="card-edit-actions">
+                    <button class="btn btn-sm" @click="editingCard = null">Cancel</button>
+                    <button class="btn btn-sm btn-primary" @click="editingCard = null">Save</button>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
+        </story-section>
+
+        <!-- ============================================================
+             TOOLBAR
+             ============================================================ -->
+        <story-section id="toolbar" title="Toolbar">
+          <template #desc>
+            Flex row above a table or card grid: filters + a search box + a right-aligned
+            primary action. <code class="text-mono">.toolbar-spacer</code> is a
+            <code class="text-mono">flex: 1</code> pusher — put it wherever the gap should open up.
+          </template>
+          <div class="story-demo">
+            <div class="toolbar" style="width:100%">
+              <select class="select select-sm"><option>All statuses</option></select>
+              <input class="input input-sm search-input" placeholder="Search…" />
+              <span class="toolbar-spacer"></span>
+              <button class="btn btn-sm btn-primary">+ New</button>
+            </div>
+          </div>
+        </story-section>
+
+        <!-- ============================================================
+             TABS
+             ============================================================ -->
+        <story-section id="tabs" title="Tabs — UiTabs">
+          <template #desc>
+            <code class="text-mono">UiTabs</code> owns the underline + panel-switching
+            markup; the page only owns which tab is active
+            (<code class="text-mono">v-model</code>) and provides one named slot per tab.
+            It replaced hand-wiring an <code class="text-mono">activeTab</code> string plus
+            manual <code class="text-mono">.tab</code>/<code class="text-mono">.tab-panel</code>
+            classes — payments.html still does that by hand since it predates this component.
+          </template>
+          <!-- .tab-panel defaults to display:none in common.css and only .active flips it
+               to display:block — UiTabs binds both :class="{ active }" and v-show
+               internally so callers don't have to know that. See ui-tabs.js. -->
+          <div class="story-demo column">
+            <ui-tabs :tabs="demoTabs" v-model="demoTab">
+              <template #inbound>Inbound payments panel.</template>
+              <template #outbound>Outbound payments panel.</template>
+            </ui-tabs>
+          </div>
+          <pre v-pre class="story-code"><code>&lt;ui-tabs :tabs="[{ value: 'inbound', label: 'Inbound' }, { value: 'outbound', label: 'Outbound' }]" v-model="activeTab"&gt;
+  &lt;template #inbound&gt;...&lt;/template&gt;
+  &lt;template #outbound&gt;...&lt;/template&gt;
+&lt;/ui-tabs&gt;</code></pre>
+
+          <!-- proves UiTabs works nested inside UiModal: give the nested instance its
+               own v-model state (modalDemoTab), independent of the page's own demoTab
+               above — the two never fight over the same reactive value -->
+          <h3 style="margin-top:24px">Tabs inside a modal</h3>
+          <p class="text-sm text-muted story-desc">
+            Same component, no special-casing — it's just markup inside
+            <code class="text-mono">UiModal</code>'s default slot.
+          </p>
+          <div class="story-demo">
+            <button class="btn btn-primary" @click="modalTabsOpen = true">Open modal with tabs</button>
+            <ui-modal v-model:open="modalTabsOpen" title="Register payment">
+              <ui-tabs :tabs="demoTabs" v-model="modalDemoTab">
+                <template #inbound>
+                  <div class="form-grid">
+                    <div class="field span-2"><label>From</label><input class="input" placeholder="Customer" /></div>
+                    <div class="field"><label>Amount</label><input class="input" placeholder="0,00" /></div>
+                  </div>
+                </template>
+                <template #outbound>
+                  <div class="form-grid">
+                    <div class="field span-2"><label>To</label><input class="input" placeholder="Payee" /></div>
+                    <div class="field"><label>Amount</label><input class="input" placeholder="0,00" /></div>
+                  </div>
+                </template>
+              </ui-tabs>
+            </ui-modal>
+          </div>
+        </story-section>
+
+        <!-- ============================================================
+             MODAL
+             ============================================================ -->
+        <story-section id="modal" title="UiModal">
+          <template #desc>
+            Centered overlay dialog for confirmations and short forms. The page owns the
+            open state as a plain boolean; <code class="text-mono">UiModal</code> never
+            manages it itself.
+          </template>
+          <!-- always pair :open with v-model:open — the component only emits
+               update:open, it never mutates a prop you passed in -->
+          <div class="story-demo">
+            <button class="btn btn-primary" @click="demoModalOpen = true">Open modal</button>
+            <ui-modal v-model:open="demoModalOpen" title="Register payment">
+              <p class="text-sm">Modal body — any content, including a <code class="text-mono">.form-grid</code>.</p>
+            </ui-modal>
+          </div>
+          <pre v-pre class="story-code"><code>&lt;button class="btn btn-primary" @click="showModal = true"&gt;Open&lt;/button&gt;
+&lt;ui-modal v-model:open="showModal" title="Register payment"&gt;
+  &lt;div class="form-grid"&gt;...&lt;/div&gt;
+&lt;/ui-modal&gt;</code></pre>
+        </story-section>
+
+        <!-- ============================================================
+             DRAWER
+             ============================================================ -->
+        <story-section id="drawer" title="UiDrawer">
+          <template #desc>
+            Same contract as <code class="text-mono">UiModal</code>
+            (<code class="text-mono">open</code>/<code class="text-mono">title</code> props,
+            <code class="text-mono">update:open</code> emit, default + <code class="text-mono">footer</code>
+            slots), rendered as a right-side sliding panel instead of a centered overlay.
+            Use it for "create/edit a record" (new invoice, register a payment); use
+            <code class="text-mono">UiModal</code> for shorter confirmations.
+          </template>
+          <div class="story-demo">
+            <button class="btn btn-primary" @click="demoDrawerOpen = true">Open drawer</button>
+            <ui-drawer v-model:open="demoDrawerOpen" title="New invoice">
+              <div class="form-grid">
+                <div class="field span-2"><label>Customer</label><input class="input" /></div>
+              </div>
+            </ui-drawer>
+          </div>
+        </story-section>
+
+        <!-- ============================================================
+             FAB
+             ============================================================ -->
+        <story-section id="fab" title="FAB">
+          <template #desc>
+            Bottom-right floating action button for a page's primary "create" action
+            (wrap several in <code class="text-mono">.fab-group</code> if there's more than
+            one). The <code class="text-mono">&lt;kbd&gt;</code> hint documents the "N" keyboard
+            shortcut — theme.js wires it globally to whatever element carries
+            <code class="text-mono">[data-shortcut-n]</code>; put that attribute on exactly one
+            button per page.
+          </template>
+          <div class="story-demo">
+            <button class="fab" data-shortcut-n>+ New invoice <kbd>N</kbd></button>
+          </div>
+        </story-section>
+
+        <!-- ============================================================
+             PROGRESS
+             ============================================================ -->
+        <story-section id="progress" title="Progress bar">
+          <template #desc>Paid-percentage bar on invoice rows/cards. Width is just an inline style bound to a number — no component, no library.</template>
+          <div class="story-demo column">
+            <div>
+              <div class="progress-bar"><div class="progress-fill" style="width:65%"></div></div>
+              <span class="progress-label">65%</span>
+            </div>
+          </div>
+          <pre v-pre class="story-code"><code>&lt;div class="progress-bar"&gt;&lt;div class="progress-fill" :style="{ width: pct + '%' }"&gt;&lt;/div&gt;&lt;/div&gt;</code></pre>
+        </story-section>
+
+        <!-- ============================================================
+             CALENDAR (cosmetic)
+             ============================================================ -->
+        <story-section id="calendar" title="Calendar (cosmetic)">
+          <template #desc>
+            Used on tax-appointments. Note: in the real page, prev/next only relabel the
+            month heading — the day grid below is static markup and intentionally does not
+            regenerate. That was true of the original pre-Vue prototype too; it was
+            preserved as-is during the Vue conversion rather than "fixed".
+          </template>
+          <!-- abbreviated to one partial week for the demo — see views/tax-appointments.html
+               for the full 6-row grid and its FY-filtered appointment list -->
+          <div class="story-demo">
+            <div class="calendar" style="max-width:280px">
+              <div class="calendar-header">
+                <button class="btn btn-icon btn-sm">‹</button>
+                <strong>July 2025</strong>
+                <button class="btn btn-icon btn-sm">›</button>
+              </div>
+              <div class="calendar-grid">
+                <div class="cal-dow">M</div><div class="cal-dow">T</div><div class="cal-dow">W</div>
+                <div class="cal-dow">T</div><div class="cal-dow">F</div><div class="cal-dow">S</div><div class="cal-dow">S</div>
+                <div class="cal-day other">29</div><div class="cal-day other">30</div>
+                <div class="cal-day">1</div><div class="cal-day">2</div><div class="cal-day">3</div>
+                <div class="cal-day has-event">4</div><div class="cal-day">5</div>
+                <div class="cal-day">6</div><div class="cal-day today has-event">7</div>
+                <div class="cal-day">8</div><div class="cal-day">9</div><div class="cal-day">10</div><div class="cal-day">11</div>
+              </div>
+            </div>
+          </div>
+        </story-section>
+
+        <!-- ============================================================
+             EVENT LIST
+             ============================================================ -->
+        <story-section id="events" title="Event list">
+          <template #desc>Dashboard "upcoming" list — date column + title + subtitle, no table needed.</template>
+          <div class="story-demo column">
+            <div class="event-item"><span class="event-date">12 Jul</span><div><strong>IVA payment</strong><div class="text-sm text-muted">Q2 VAT installment</div></div></div>
+            <div class="event-item"><span class="event-date">31 Jul</span><div><strong>INPS Gestione Separata</strong><div class="text-sm text-muted">Quarterly contribution</div></div></div>
+          </div>
+        </story-section>
+
+        <!-- ============================================================
+             CHARTS
+             ============================================================ -->
+        <story-section id="charts" title="Charts (CSS bars)">
+          <template #desc>
+            No charting library — bars are plain divs with a bound height percentage,
+            colored by CSS class. Fine for the small comparison charts on the dashboard;
+            reach for a real library if a view ever needs zoom, tooltips, or a log scale.
+          </template>
+          <div class="story-demo">
+            <div class="chart-card card" style="width:100%">
+              <div class="card-body">
+                <div class="chart-area">
+                  <div class="chart-bar-group" v-for="b in demoChart" :key="b.label">
+                    <div class="chart-bar tax" :style="{ height: b.pct + '%' }"></div>
+                    <span class="text-xs text-muted">{{ b.label }}</span>
+                  </div>
+                </div>
+                <div class="chart-legend">
+                  <span><span class="legend-dot" style="background:var(--warn)"></span>Tax</span>
+                  <span><span class="legend-dot" style="background:var(--info)"></span>Inarcassa</span>
+                  <span><span class="legend-dot" style="background:var(--accent)"></span>VAT</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </story-section>
+
+        <!-- ============================================================
+             APP SHELL — full-page chrome, shown via live iframe
+             ============================================================ -->
+        <story-section id="app-shell" title="AppShell">
+          <template #desc>
+            Sidebar nav + topbar + &lt;main&gt; slot — the chrome every real view sits inside.
+            Renders entirely from the shared <code class="text-mono">NAV</code> array in
+            <code class="text-mono">js/components/app-shell.js</code>, so there's nothing
+            page-specific to configure beyond <code class="text-mono">page</code> (active-link
+            highlight) and <code class="text-mono">title</code>. Each nav section header
+            (<em>Main</em>, <em>Tax</em>) is clickable and collapses its section — try it in
+            the preview below — with the collapsed state persisted to
+            <code class="text-mono">localStorage</code> so it survives navigation.
+          </template>
+          <!-- shown as a live scaled iframe of the real customers.html, not reproduced
+               inline: AppShell owns the whole page's CSS grid rooted on <body>, so it
+               can't be nested inside this page's own content area -->
+          <div class="story-demo">
+            <div class="screen-preview" style="max-width:360px">
+              <div class="screen-preview-frame"><iframe src="views/customers.html" tabindex="-1" loading="lazy"></iframe></div>
+            </div>
+          </div>
+          <pre v-pre class="story-code"><code>&lt;body class="app-shell"&gt;
+  &lt;div id="app"&gt;
+    &lt;app-shell page="customers" title="Customers"&gt;
+      &lt;template #topbar-right&gt;...&lt;/template&gt;
+      ...page content...
+    &lt;/app-shell&gt;
+  &lt;/div&gt;
+
+  &lt;style&gt;#app { display: contents; }&lt;/style&gt;  &lt;!-- required, see below --&gt;</code></pre>
+          <p class="text-sm text-muted" style="margin-top:8px">
+            Without <code class="text-mono">#app { display: contents; }</code> in the page's
+            &lt;head&gt;, the layout collapses to a narrow column: Vue mounts the sidebar/topbar/main
+            one DOM level deeper (inside <code class="text-mono">#app</code>) than the grid in
+            common.css expects. Every AppShell-using view needs that line — copy it from
+            the page skeleton in COMPONENTS.md, or from any file under views/.
+          </p>
+        </story-section>
+
+        <!-- ============================================================
+             THEME, PALETTE & FORMAT HELPERS
+             ============================================================ -->
+        <story-section id="theme" title="Theme, palette & format helpers">
+          <template #desc>
+            Vanilla, not Vue's job — <code class="text-mono">js/theme.js</code> runs as a
+            classic script before Vue mounts (avoids a flash of the wrong theme) and exposes
+            <code class="text-mono">window.FiscoDesk.formatEUR</code> /
+            <code class="text-mono">.formatPct</code>. Wire them into a page's own
+            <code class="text-mono">methods</code>; don't reimplement
+            <code class="text-mono">Intl.NumberFormat</code> per view.
+          </template>
+          <div class="story-demo column">
+            <p class="text-sm">formatEUR(1234.5) → <strong class="text-mono">{{ formatEUR(1234.5) }}</strong></p>
+            <p class="text-sm">formatPct(21) → <strong class="text-mono">{{ formatPct(21) }}</strong></p>
+            <p class="text-sm text-muted">Click "Theme" top-right, or the palette swatches next to it, to see every section on this page react live.</p>
+          </div>
+          <pre v-pre class="story-code"><code>methods: {
+  formatEUR: window.FiscoDesk.formatEUR,
+  formatPct: window.FiscoDesk.formatPct,
+}</code></pre>
+        </story-section>
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/vue.global.js"></script>
+  <script src="js/theme.js"></script>
+  <script type="module">
+    import { UiModal } from './js/components/ui-modal.js';
+    import { UiDrawer } from './js/components/ui-drawer.js';
+    import { UiTabs } from './js/components/ui-tabs.js';
+    import { StorySection } from './js/storybook/story-section.js';
+    import { StoryNav } from './js/storybook/story-nav.js';
+
+    const { createApp } = Vue;
+    createApp({
+      components: { UiModal, UiDrawer, UiTabs, StorySection, StoryNav },
+      data() {
+        return {
+          sections: [],
+          tokens: [
+            '--bg', '--surface', '--surface-2', '--fg', '--muted', '--border',
+            '--accent', '--accent-fg', '--accent-muted',
+            '--danger', '--danger-muted', '--warn', '--warn-muted',
+            '--success', '--success-muted', '--info', '--info-muted',
+          ],
+          demoField: '',
+          demoRows: [
+            { id: 1, description: 'Consulting — March', amount: 1200 },
+            { id: 2, description: 'Retainer — Q2', amount: 3000 },
+          ],
+          editingRow: null,
+          demoCards: [
+            { id: 1, year: 2025, note: 'Forfettario, open' },
+            { id: 2, year: 2024, note: 'Forfettario, closed' },
+          ],
+          editingCard: null,
+          demoTabs: [
+            { value: 'inbound', label: 'Inbound' },
+            { value: 'outbound', label: 'Outbound' },
+          ],
+          demoTab: 'inbound',
+          modalTabsOpen: false,
+          modalDemoTab: 'inbound',
+          demoModalOpen: false,
+          demoDrawerOpen: false,
+          demoChart: [
+            { label: 'Q1', pct: 40 },
+            { label: 'Q2', pct: 70 },
+            { label: 'Q3', pct: 55 },
+            { label: 'Q4', pct: 85 },
+          ],
+          demoForm: {
+            customer: '',
+            number: '',
+            description: '',
+            issueDate: '',
+            dueDate: '',
+            taxable: null,
+            terms: 'Due on receipt',
+            status: 'draft',
+            notes: '',
+            sendCopy: false,
+          },
+          demoFormSubmitted: false,
+        };
+      },
+      mounted() {
+        // Build the TOC from the sections that actually rendered instead of a
+        // hand-maintained list, so it can never drift out of sync.
+        this.sections = [...document.querySelectorAll('.story-section')].map((el) => ({
+          id: el.id,
+          title: el.querySelector('h2').textContent,
+        }));
+      },
+      methods: {
+        formatEUR: window.FiscoDesk.formatEUR,
+        formatPct: window.FiscoDesk.formatPct,
+        addDemoRow() {
+          const id = Math.max(0, ...this.demoRows.map((r) => r.id)) + 1;
+          this.demoRows.unshift({ id, description: 'New row', amount: 0 });
+          this.editingRow = id;
+        },
+        removeDemoRow(id) {
+          if (confirm('Delete this row?')) {
+            this.demoRows = this.demoRows.filter((r) => r.id !== id);
+          }
+        },
+        submitDemoForm(e) {
+          if (!e.target.reportValidity()) return;
+          this.demoFormSubmitted = true;
+        },
+        resetDemoForm() {
+          this.demoForm = {
+            customer: '', number: '', description: '', issueDate: '', dueDate: '',
+            taxable: null, terms: 'Due on receipt', status: 'draft', notes: '', sendCopy: false,
+          };
+          this.demoFormSubmitted = false;
+        },
+      },
+    }).mount('#app');
+  </script>
+</body>
+</html>

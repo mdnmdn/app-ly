@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Customers — FiscoDesk</title>
+  <link rel="stylesheet" href="../css/common.css" />
+  <style>#app { display: contents; }</style>
+</head>
+<body class="app-shell">
+  <div id="app">
+    <app-shell page="customers" title="Customers">
+      <template #topbar-right>
+        <select class="select select-sm"><option>FY 2025</option></select>
+        <button class="btn btn-ghost btn-icon" data-theme-toggle title="Toggle theme"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12a5 5 0 010-10 5 5 0 000 10z"/></svg></button>
+      </template>
+
+      <div class="toolbar">
+        <input class="input input-sm search-input" type="search" placeholder="Search customers…" />
+        <div class="toolbar-spacer"></div>
+        <button class="btn btn-sm">Export CSV</button>
+        <button class="btn btn-sm">Export PDF</button>
+        <button class="btn btn-primary" data-shortcut-n @click="addCustomer">New Customer</button>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="col-required">Customer Name</th>
+              <th>Description</th>
+              <th class="col-required">Text ID</th>
+              <th class="num">Invoices</th>
+              <th class="num">Total Invoiced (FY)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in customers" :key="c.textId">
+              <template v-if="editing === c.textId">
+                <td><input class="input input-sm" v-model="c.name" /></td>
+                <td><textarea class="input input-sm" v-model="c.description"></textarea></td>
+                <td><input class="input input-sm text-mono" v-model="c.textId" /></td>
+                <td class="num">{{ c.invoices }}</td>
+                <td class="num">{{ formatEUR(c.total) }}</td>
+                <td class="actions">
+                  <button type="button" class="btn btn-sm btn-primary" @click="editing = null">Save</button>
+                  <button type="button" class="btn btn-sm" @click="editing = null">Cancel</button>
+                </td>
+              </template>
+              <template v-else>
+                <td><strong>{{ c.name }}</strong></td>
+                <td class="text-muted">{{ c.description }}</td>
+                <td class="text-mono">{{ c.textId }}</td>
+                <td class="num">{{ c.invoices }}</td>
+                <td class="num">{{ formatEUR(c.total) }}</td>
+                <td class="actions">
+                  <button type="button" class="btn btn-sm btn-ghost" @click="editing = c.textId">Edit</button>
+                  <button type="button" class="btn btn-sm btn-danger" @click="removeCustomer(c.textId)">Delete</button>
+                </td>
+              </template>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </app-shell>
+  </div>
+
+  <script src="../vendor/vue.global.js"></script>
+  <script src="../js/theme.js"></script>
+  <script type="module">
+    import { AppShell } from '../js/components/app-shell.js';
+    const { createApp } = Vue;
+    createApp({
+      components: { AppShell },
+      data() {
+        return {
+          editing: null,
+          customers: [
+            { name: 'TechLab Srl', description: 'Software development client, Milan', textId: 'CLI-003', invoices: 6, total: 22400 },
+            { name: 'Studio Rossi', description: 'Design agency, recurring projects', textId: 'CLI-001', invoices: 5, total: 15800 },
+            { name: 'Freelance Co', description: 'Training & workshops', textId: 'CLI-005', invoices: 2, total: 6800 },
+            { name: 'Acme Consulting', description: 'One-off strategy project', textId: 'CLI-007', invoices: 1, total: 3750 },
+          ],
+        };
+      },
+      methods: {
+        formatEUR: window.FiscoDesk.formatEUR,
+        addCustomer() {
+          const draft = { name: '', description: '', textId: 'CLI-NEW', invoices: 0, total: 0 };
+          this.customers.unshift(draft);
+          this.editing = draft.textId;
+        },
+        removeCustomer(textId) {
+          const c = this.customers.find((x) => x.textId === textId);
+          if (confirm('Delete customer ' + c.name + '?')) {
+            this.customers = this.customers.filter((x) => x.textId !== textId);
+          }
+        },
+      },
+    }).mount('#app');
+  </script>
+</body>
+</html>

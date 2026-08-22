@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Payments — FiscoDesk</title>
+  <link rel="stylesheet" href="../css/common.css" />
+</head>
+<body class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand"><div class="sidebar-logo">FD</div><div><div class="sidebar-title">FiscoDesk</div><div class="sidebar-sub">Invoice & Tax</div></div></div>
+    <div class="nav-section">Main</div>
+    <ul class="nav-list">
+      <li><a class="nav-link" href="dashboard.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="10" y="2" width="6" height="6" rx="1"/><rect x="2" y="10" width="6" height="6" rx="1"/><rect x="10" y="10" width="6" height="6" rx="1"/></svg>Dashboard</a></li>
+      <li><a class="nav-link" href="invoices.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2h10l2 2v12H4V2z"/><path d="M6 6h6M6 9h6M6 12h4"/></svg>Invoices</a></li>
+      <li><a class="nav-link" href="customers.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="6" r="3"/><path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>Customers</a></li>
+    </ul>
+    <div class="nav-section">Tax</div>
+    <ul class="nav-list">
+      <li><a class="nav-link" href="tax-regimes.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h12M3 8h12M3 12h8"/></svg>Tax Regimes</a></li>
+      <li><a class="nav-link" href="fiscal-years.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="12" height="11" rx="1"/><path d="M3 8h12M6 2v4M12 2v4"/></svg>Fiscal Years</a></li>
+      <li><a class="nav-link" href="tax-appointments.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="12" height="11" rx="1"/><path d="M3 8h12M7 11h2M11 11h2"/></svg>Tax Appointments</a></li>
+      <li><a class="nav-link active" href="payments.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 6h14v8H2z"/><path d="M2 9h14M5 12h4"/></svg>Payments</a></li>
+      <li><a class="nav-link disabled" href="reports.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 14V8M7 14V4M11 14V10M15 14V6"/></svg>Reports</a></li>
+    </ul>
+  </aside>
+
+  <header class="topbar">
+    <div class="topbar-left"><h1>Payments</h1></div>
+    <div class="topbar-right">
+      <select class="select select-sm"><option>FY 2025</option></select>
+      <button class="btn btn-ghost btn-icon" data-theme-toggle title="Toggle theme"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12a5 5 0 010-10 5 5 0 000 10z"/></svg></button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="toolbar">
+      <div class="toolbar-spacer"></div>
+      <button class="btn btn-sm">Export CSV</button>
+      <button class="btn btn-sm">Export PDF</button>
+      <button class="btn btn-primary" data-modal-open="unified-modal">Unified Register</button>
+    </div>
+
+    <div data-tab-group>
+      <div class="tabs">
+        <button class="tab active" data-tab="inbound">Inbound (Customer → Me)</button>
+        <button class="tab" data-tab="outbound">Outbound (Me → Authorities)</button>
+      </div>
+
+      <div class="tab-panel active" data-tab-panel="inbound">
+        <div class="toolbar" style="margin-bottom:12px">
+          <div class="toolbar-spacer"></div>
+          <button class="btn btn-primary btn-sm" data-inline-new="inbound-table">Register Inbound Payment</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="inbound-table" data-inline-table>
+            <thead>
+              <tr>
+                <th data-field="date" class="col-required" data-type="date">Date</th>
+                <th data-field="invoices" class="col-required" data-type="mono">Invoice(s)</th>
+                <th data-field="customer" class="col-required" data-type="select" data-options="TechLab Srl|Studio Rossi|Freelance Co|Acme Consulting">Customer</th>
+                <th data-field="amount" class="col-required num" data-type="eur">Amount Received</th>
+                <th data-field="notes" data-type="textarea">Notes</th>
+                <th data-field="actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td data-field="date" data-value="2025-06-05">05/06/2025</td>
+                <td data-field="invoices" data-value="INV-2025-011" class="text-mono">INV-2025-011</td>
+                <td data-field="customer" data-value="TechLab Srl">TechLab Srl</td>
+                <td data-field="amount" data-value="1570.80" class="num" data-eur="1570.80">—</td>
+                <td data-field="notes" data-value="Partial — 70% of invoice" class="text-muted">Partial — 70% of invoice</td>
+                <td class="actions" data-field="actions">
+                  <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button><button type="button" class="btn btn-sm btn-danger" data-confirm="Delete payment?">Delete</button></span>
+                  <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+                </td>
+              </tr>
+              <tr>
+                <td data-field="date" data-value="2025-04-22">22/04/2025</td>
+                <td data-field="invoices" data-value="INV-2025-006" class="text-mono">INV-2025-006</td>
+                <td data-field="customer" data-value="Studio Rossi">Studio Rossi</td>
+                <td data-field="amount" data-value="2450" class="num" data-eur="2450">—</td>
+                <td data-field="notes" data-value="Full payment via bank transfer" class="text-muted">Full payment via bank transfer</td>
+                <td class="actions" data-field="actions">
+                  <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button><button type="button" class="btn btn-sm btn-danger" data-confirm="Delete payment?">Delete</button></span>
+                  <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+                </td>
+              </tr>
+              <tr>
+                <td data-field="date" data-value="2025-03-10">10/03/2025</td>
+                <td data-field="invoices" data-value="INV-2025-004, INV-2025-005" class="text-mono">INV-2025-004, INV-2025-005</td>
+                <td data-field="customer" data-value="Freelance Co">Freelance Co</td>
+                <td data-field="amount" data-value="5200" class="num" data-eur="5200">—</td>
+                <td data-field="notes" data-value="Batch payment for two invoices" class="text-muted">Batch payment for two invoices</td>
+                <td class="actions" data-field="actions">
+                  <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button><button type="button" class="btn btn-sm btn-danger" data-confirm="Delete payment?">Delete</button></span>
+                  <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="tab-panel" data-tab-panel="outbound">
+        <div class="toolbar" style="margin-bottom:12px">
+          <div class="toolbar-spacer"></div>
+          <button class="btn btn-primary btn-sm" data-inline-new="outbound-table">Register Outbound Payment</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="outbound-table" data-inline-table>
+            <thead>
+              <tr>
+                <th data-field="date" class="col-required" data-type="date">Date</th>
+                <th data-field="type" class="col-required" data-type="select" data-options="Tax|Inarcassa|VAT|Top-up">Type</th>
+                <th data-field="amount" class="col-required num" data-type="eur">Amount</th>
+                <th data-field="fiscalYear" class="col-required" data-type="select" data-options="2025|2024|2026">FY</th>
+                <th data-field="appointment" data-type="mono">Appointment</th>
+                <th data-field="notes" data-type="textarea">Notes</th>
+                <th data-field="actions"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td data-field="date" data-value="2025-04-16">16/04/2025</td>
+                <td data-field="type" data-value="Tax">Tax</td>
+                <td data-field="amount" data-value="1650" class="num" data-eur="1650">—</td>
+                <td data-field="fiscalYear" data-value="2025">2025</td>
+                <td data-field="appointment" data-value="Q1 Tax · 16/04" class="text-mono">Q1 Tax · 16/04</td>
+                <td data-field="notes" data-value="F24 payment" class="text-muted">F24 payment</td>
+                <td class="actions" data-field="actions">
+                  <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button><button type="button" class="btn btn-sm btn-danger" data-confirm="Delete payment?">Delete</button></span>
+                  <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+                </td>
+              </tr>
+              <tr>
+                <td data-field="date" data-value="2025-05-20">20/05/2025</td>
+                <td data-field="type" data-value="Inarcassa">Inarcassa</td>
+                <td data-field="amount" data-value="1280.50" class="num" data-eur="1280.50">—</td>
+                <td data-field="fiscalYear" data-value="2025">2025</td>
+                <td data-field="appointment" data-value="Q1 Inarcassa · 20/05" class="text-mono">Q1 Inarcassa · 20/05</td>
+                <td data-field="notes" data-value="DSM payment" class="text-muted">DSM payment</td>
+                <td class="actions" data-field="actions">
+                  <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button><button type="button" class="btn btn-sm btn-danger" data-confirm="Delete payment?">Delete</button></span>
+                  <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+                </td>
+              </tr>
+              <tr>
+                <td data-field="date" data-value="2025-02-18">18/02/2025</td>
+                <td data-field="type" data-value="Top-up">Top-up</td>
+                <td data-field="amount" data-value="420" class="num" data-eur="420">—</td>
+                <td data-field="fiscalYear" data-value="2025">2025</td>
+                <td data-field="appointment" data-value="">—</td>
+                <td data-field="notes" data-value="Annual top-up contribution" class="text-muted">Annual top-up contribution</td>
+                <td class="actions" data-field="actions">
+                  <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button><button type="button" class="btn btn-sm btn-danger" data-confirm="Delete payment?">Delete</button></span>
+                  <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="overlay" id="inbound-modal" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-header"><h2>Register Inbound Payment</h2><button class="btn btn-ghost btn-icon" data-modal-close="inbound-modal">✕</button></div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="field"><label>Date</label><input class="input" type="date" value="2025-06-16" /></div>
+          <div class="field"><label>Amount Received</label><input class="input" value="1570,80" /></div>
+          <div class="field span-2"><label>Invoice(s)</label><select class="select" multiple size="3" style="height:auto"><option selected>INV-2025-011 — TechLab Srl</option><option>INV-2025-014 — TechLab Srl</option><option>INV-2025-008 — Studio Rossi</option></select></div>
+          <div class="field span-2"><label>Notes</label><textarea class="textarea">Partial payment</textarea></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-modal-close="inbound-modal">Cancel</button>
+        <button class="btn btn-primary" data-modal-close="inbound-modal">Register</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="outbound-modal" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-header"><h2>Register Outbound Payment</h2><button class="btn btn-ghost btn-icon" data-modal-close="outbound-modal">✕</button></div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="field span-2">
+            <label>Fiscal Year</label>
+            <select class="select"><option selected>2025 — Open</option><option>2024 — Closed</option></select>
+            <span class="field-hint">Filters linked appointments for this year</span>
+          </div>
+          <div class="field"><label>Date</label><input class="input" type="date" value="2025-07-16" /></div>
+          <div class="field"><label>Type</label><select class="select"><option>Tax</option><option>Inarcassa</option><option>VAT</option><option>Top-up</option></select></div>
+          <div class="field"><label>Amount</label><input class="input" value="1828,13" /></div>
+          <div class="field span-2"><label>Linked Appointment</label><select class="select"><option>Q2 Tax · FY 2025 · 16/07/2025</option><option>Inarcassa Q2 · FY 2025 · 20/08/2025</option><option>None</option></select></div>
+          <div class="field span-2"><label>Notes</label><textarea class="textarea"></textarea></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-modal-close="outbound-modal">Cancel</button>
+        <button class="btn btn-primary" data-modal-close="outbound-modal">Register</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="unified-modal" aria-hidden="true">
+    <div class="modal">
+      <div class="modal-header"><h2>Unified Payment Register</h2><button class="btn btn-ghost btn-icon" data-modal-close="unified-modal">✕</button></div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="field span-2"><label>Direction</label><select class="select"><option>Inbound (Customer → Me)</option><option>Outbound (Me → Authorities)</option></select></div>
+          <div class="field"><label>Date</label><input class="input" type="date" /></div>
+          <div class="field"><label>Amount</label><input class="input" placeholder="0,00" /></div>
+          <div class="field span-2"><label>Notes</label><textarea class="textarea"></textarea></div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" data-modal-close="unified-modal">Cancel</button>
+        <button class="btn btn-primary" data-modal-close="unified-modal">Register Payment</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../js/app.js"></script>
+</body>
+</html>

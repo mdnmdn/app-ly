@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Fiscal Years — FiscoDesk</title>
+  <link rel="stylesheet" href="../css/common.css" />
+  <style>#app { display: contents; }</style>
+</head>
+<body class="app-shell">
+  <div id="app">
+    <app-shell page="fiscal-years" title="Fiscal Years">
+      <template #topbar-right>
+        <button class="btn btn-ghost btn-icon" data-theme-toggle title="Toggle theme"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12a5 5 0 010-10 5 5 0 000 10z"/></svg></button>
+      </template>
+
+      <div class="toolbar">
+        <p class="text-muted text-sm">Each fiscal year groups invoices and tax appointments</p>
+        <div class="toolbar-spacer"></div>
+        <button class="btn btn-sm">Export CSV</button>
+        <button class="btn btn-primary" @click="addFiscalYear">New Fiscal Year</button>
+      </div>
+
+      <section class="fy-grid">
+        <article class="fy-card" v-for="fy in fiscalYears" :key="fy.year" :style="fy.year === 2023 ? 'opacity:0.85' : ''">
+          <div class="card-view" v-if="editing !== fy.year">
+            <div style="display:flex;justify-content:space-between;align-items:start">
+              <div class="fy-year">{{ fy.year }}</div>
+              <span :class="'badge ' + (fy.status === 'Open' ? 'badge-open' : 'badge-closed')">{{ fy.status }}</span>
+            </div>
+            <div class="text-sm text-muted">{{ fy.regime }} · {{ fy.start }} – {{ fy.end }}</div>
+            <dl class="fy-meta">
+              <dt>Taxable</dt><dd>{{ formatEUR(fy.taxable) }}</dd>
+              <dt>VAT</dt><dd>{{ formatEUR(fy.vat) }}</dd>
+              <dt>Inarcassa</dt><dd>{{ formatEUR(fy.inarcassa) }}</dd>
+              <dt>Gross Invoiced</dt><dd>{{ formatEUR(fy.gross) }}</dd>
+              <dt>Appointments</dt><dd>{{ fy.appointmentsText }}</dd>
+              <dt>Next due</dt><dd>{{ fy.nextDue }}</dd>
+            </dl>
+            <div class="fy-card-actions">
+              <button type="button" class="btn btn-sm btn-ghost" @click="editing = fy.year">Edit</button>
+              <a class="btn btn-sm" href="invoices.html">Invoices</a>
+              <a class="btn btn-sm btn-primary" href="tax-appointments.html">Appointments</a>
+            </div>
+          </div>
+          <div class="card-edit" v-else>
+            <div class="form-grid">
+              <div class="field"><label class="required">Year</label><input class="input" type="number" v-model.number="fy.year" required /></div>
+              <div class="field"><label class="required">Status</label><select class="select" v-model="fy.status" required><option>Open</option><option>Closed</option></select></div>
+              <div class="field span-2"><label class="required">Tax Regime</label><select class="select" v-model="fy.regime" required><option>Forfettario 2025</option><option>Ordinario 2025</option><option>Forfettario 2024</option><option>Ordinario 2024</option><option>Forfettario 2023</option><option>Ordinario 2023</option></select></div>
+              <div class="field"><label class="required">Start Date</label><input class="input" type="date" v-model="fy.start" required /></div>
+              <div class="field"><label class="required">End Date</label><input class="input" type="date" v-model="fy.end" required /></div>
+            </div>
+            <div class="card-edit-actions">
+              <button type="button" class="btn btn-sm btn-primary" @click="editing = null">Save</button>
+              <button type="button" class="btn btn-sm" @click="cancelEdit(fy)">Cancel</button>
+            </div>
+          </div>
+        </article>
+      </section>
+    </app-shell>
+  </div>
+
+  <script src="../vendor/vue.global.js"></script>
+  <script src="../js/theme.js"></script>
+  <script type="module">
+    import { AppShell } from '../js/components/app-shell.js';
+    const { createApp } = Vue;
+    createApp({
+      components: { AppShell },
+      data() {
+        return {
+          editing: null,
+          fiscalYears: [
+            { year: 2025, status: 'Open', regime: 'Forfettario 2025', start: '01/01', end: '31/12', taxable: 48750, vat: 0, inarcassa: 12787.13, gross: 49725, appointmentsText: '3 scheduled · 1 paid', nextDue: '16/07/2025' },
+            { year: 2024, status: 'Closed', regime: 'Forfettario 2024', start: '01/01', end: '31/12', taxable: 42300, vat: 0, inarcassa: 11028.81, gross: 43146, appointmentsText: '4 completed', nextDue: '—' },
+            { year: 2023, status: 'Closed', regime: 'Ordinario 2023', start: '01/01', end: '31/12', taxable: 38500, vat: 8470, inarcassa: 10036.55, gross: 46970, appointmentsText: '4 completed', nextDue: '—' },
+          ],
+        };
+      },
+      methods: {
+        formatEUR: window.FiscoDesk.formatEUR,
+        addFiscalYear() {
+          const draft = { year: new Date().getFullYear() + 1, status: 'Open', regime: '', start: '', end: '', taxable: 0, vat: 0, inarcassa: 0, gross: 0, appointmentsText: '0 scheduled', nextDue: '—', isNew: true };
+          this.fiscalYears.unshift(draft);
+          this.editing = draft.year;
+        },
+        cancelEdit(fy) {
+          if (fy.isNew) {
+            this.fiscalYears = this.fiscalYears.filter((x) => x !== fy);
+          }
+          this.editing = null;
+        },
+      },
+    }).mount('#app');
+  </script>
+</body>
+</html>

@@ -36,9 +36,48 @@ impl ProcessState {
     }
 
     fn entry(&self, name: &str) -> Result<&CommandEntry, String> {
-        self.commands.iter().find(|e| e.name == name).ok_or_else(|| {
-            format!("no allowed command named \"{name}\" — add an [[allowedCommands]] entry to app.toml")
-        })
+        if let Some(entry) = self.commands.iter().find(|e| e.name == name) {
+            return Ok(entry);
+        }
+        if self.commands.is_empty() {
+            return Err(format!(
+                "no allowed command named \"{name}\" — this app.toml has no [[allowedCommands]]"
+            ));
+        }
+        let names = self
+            .commands
+            .iter()
+            .map(|entry| entry.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        Err(format!(
+            "no allowed command named \"{name}\" — app.toml allows: {names}"
+        ))
+    }
+
+    pub fn run_sync(
+        &self,
+        name: &str,
+        args: Vec<String>,
+        timeout_ms: Option<u64>,
+        stdin: Option<String>,
+    ) -> Result<RunResult, String> {
+        let entry = self.entry(name)?.clone();
+        run_blocking(entry, self.config_dir.clone(), args, timeout_ms, stdin)
+    }
+
+    pub fn list(&self) -> Vec<CommandInfo> {
+        self.commands
+            .iter()
+            .map(|entry| CommandInfo {
+                name: entry.name.clone(),
+                program: entry.program.clone(),
+                args_restricted: entry.args.is_some()
+                    || entry.extra_args.is_some()
+                    || entry.max_args.is_some(),
+                timeout_ms: entry.timeout_ms,
+            })
+            .collect()
     }
 }
 
@@ -592,18 +631,7 @@ pub fn shell_process_set_timeout(
 
 #[tauri::command(rename_all = "camelCase")]
 pub fn shell_list_commands(state: State<'_, ProcessState>) -> Vec<CommandInfo> {
-    state
-        .commands
-        .iter()
-        .map(|entry| CommandInfo {
-            name: entry.name.clone(),
-            program: entry.program.clone(),
-            args_restricted: entry.args.is_some()
-                || entry.extra_args.is_some()
-                || entry.max_args.is_some(),
-            timeout_ms: entry.timeout_ms,
-        })
-        .collect()
+    state.list()
 }
 
 #[cfg(test)]

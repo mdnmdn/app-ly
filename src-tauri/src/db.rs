@@ -218,16 +218,15 @@ fn value_from_row(row: &Row<'_>, index: usize) -> Result<Value, String> {
     }
 }
 
-#[tauri::command(rename_all = "camelCase")]
-pub fn shell_db_query(
-    state: State<'_, ShellState>,
-    db: State<'_, DbState>,
+pub fn db_query(
+    shell: &ShellState,
+    db: &DbState,
     db_name: String,
     query: String,
     params: Option<Vec<Value>>,
 ) -> Result<QueryResult, String> {
     let sql_params = sql_params(&params.unwrap_or_default())?;
-    with_connection(&db, &state, &db_name, |connection| {
+    with_connection(db, shell, &db_name, |connection| {
         let mut statement = connection
             .prepare(&query)
             .map_err(|e| format!("prepare query: {e}"))?;
@@ -259,15 +258,25 @@ pub fn shell_db_query(
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn shell_db_execute(
+pub fn shell_db_query(
     state: State<'_, ShellState>,
     db: State<'_, DbState>,
     db_name: String,
     query: String,
     params: Option<Vec<Value>>,
+) -> Result<QueryResult, String> {
+    db_query(&state, &db, db_name, query, params)
+}
+
+pub fn db_execute(
+    shell: &ShellState,
+    db: &DbState,
+    db_name: String,
+    query: String,
+    params: Option<Vec<Value>>,
 ) -> Result<ExecuteResult, String> {
     let sql_params = sql_params(&params.unwrap_or_default())?;
-    with_connection(&db, &state, &db_name, |connection| {
+    with_connection(db, shell, &db_name, |connection| {
         let mut statement = connection
             .prepare(&query)
             .map_err(|e| format!("prepare query: {e}"))?;
@@ -290,8 +299,23 @@ pub fn shell_db_execute(
 }
 
 #[tauri::command(rename_all = "camelCase")]
+pub fn shell_db_execute(
+    state: State<'_, ShellState>,
+    db: State<'_, DbState>,
+    db_name: String,
+    query: String,
+    params: Option<Vec<Value>>,
+) -> Result<ExecuteResult, String> {
+    db_execute(&state, &db, db_name, query, params)
+}
+
+pub fn db_close(db: &DbState, db_name: Option<&str>) -> Result<(), String> {
+    close_cached(db, db_name)
+}
+
+#[tauri::command(rename_all = "camelCase")]
 pub fn shell_db_close(db: State<'_, DbState>, db_name: Option<String>) -> Result<(), String> {
-    close_cached(&db, db_name.as_deref())
+    db_close(&db, db_name.as_deref())
 }
 
 #[cfg(test)]

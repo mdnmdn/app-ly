@@ -1,4 +1,4 @@
-use crate::paths::deploy_folder;
+use crate::paths::{bundled_resource_app_toml, deploy_folder};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -125,6 +125,7 @@ pub struct ConfigSearch {
 pub struct ConfigDiscovery {
     pub config: ShellConfig,
     pub config_dir: PathBuf,
+    pub config_path: PathBuf,
 }
 
 fn config_dir_for(path: &Path) -> PathBuf {
@@ -152,8 +153,13 @@ fn record_search(
 }
 
 fn loaded(config: ShellConfig, path: PathBuf) -> ConfigDiscovery {
-    let config_dir = config_dir_for(&display_path(path));
-    ConfigDiscovery { config, config_dir }
+    let config_path = display_path(path);
+    let config_dir = config_dir_for(&config_path);
+    ConfigDiscovery {
+        config,
+        config_dir,
+        config_path,
+    }
 }
 
 fn try_cli_config(searched: &mut Vec<ConfigSearch>) -> Result<Option<ConfigDiscovery>, String> {
@@ -191,29 +197,6 @@ fn try_deploy_config(searched: &mut Vec<ConfigSearch>) -> Result<Option<ConfigDi
         "folder containing app-ly.app (external app.toml)",
         path.clone(),
     ) {
-        let config = ShellConfig::load(&path)?;
-        return Ok(Some(loaded(config, path)));
-    }
-    Ok(None)
-}
-
-fn try_bundled_config(
-    app: &App,
-    searched: &mut Vec<ConfigSearch>,
-) -> Result<Option<ConfigDiscovery>, String> {
-    let path = match app.path().resolve("app.toml", BaseDirectory::Resource) {
-        Ok(path) => path,
-        Err(error) => {
-            searched.push(ConfigSearch {
-                label: "bundled resource (fallback)".into(),
-                path: PathBuf::from(format!("<unresolved> ({error})")),
-                exists: false,
-            });
-            return Ok(None);
-        }
-    };
-
-    if record_search(searched, "bundled resource (fallback)", path.clone()) {
         let config = ShellConfig::load(&path)?;
         return Ok(Some(loaded(config, path)));
     }
@@ -338,26 +321,35 @@ fn found(
     result.map_err(DiscoverError::Failed)
 }
 
-pub fn discover_config(app: &App) -> Result<ConfigDiscovery, DiscoverError> {
-    let mut searched = Vec::new();
-
-    if let Some(discovery) = found(try_cli_config(&mut searched))? {
+fn discover_rest(
+    mut searched: Vec<ConfigSearch>,
+    bundled: Option<PathBuf>,
+) -> Result<ConfigDiscovery, DiscoverError> {
+    // Next to the .app / executable — same identity the GUI uses when deployed.
+    // Tried in debug too so `app-ly.app/Contents/MacOS/app-ly run …` picks up
+    // that folder's app.toml instead of the shell checkout's.
+    if let Some(discovery) = found(try_deploy_config(&mut searched))? {
         return Ok(discovery);
     }
 
     if !cfg!(debug_assertions) {
-        if let Some(discovery) = found(try_deploy_config(&mut searched))? {
-            return Ok(discovery);
-        }
-
-        if let Some(discovery) = found(try_bundled_config(app, &mut searched))? {
-            return Ok(discovery);
+        if let Some(path) = bundled {
+            if record_search(&mut searched, "bundled resource (fallback)", path.clone()) {
+                let config = ShellConfig::load(&path).map_err(DiscoverError::Failed)?;
+                return Ok(loaded(config, path));
+            }
+        } else {
+            searched.push(ConfigSearch {
+                label: "bundled resource (fallback)".into(),
+                path: PathBuf::from("<unresolved>"),
+                exists: false,
+            });
         }
 
         return Err(DiscoverError::Missing(searched));
     }
 
-    if let Ok(path) = app.path().resolve("app.toml", BaseDirectory::Resource) {
+    if let Some(path) = bundled {
         searched.push(ConfigSearch {
             label: "bundled resource (skipped in dev)".into(),
             path: display_path(path),
@@ -370,6 +362,38 @@ pub fn discover_config(app: &App) -> Result<ConfigDiscovery, DiscoverError> {
     }
 
     try_dev_fallback(&mut searched).map_err(DiscoverError::Failed)
+}
+
+/// Same search order as the GUI, without needing a Tauri `App`.
+/// `config_override` is `--config` already parsed by the CLI.
+pub fn discover_config_headless(
+    config_override: Option<&Path>,
+) -> Result<ConfigDiscovery, DiscoverError> {
+    let mut searched = Vec::new();
+
+    if let Some(path) = config_override {
+        let path = path.to_path_buf();
+        record_search(&mut searched, "--config flag", path.clone());
+        let config = ShellConfig::load(&path).map_err(DiscoverError::Failed)?;
+        return Ok(loaded(config, path));
+    }
+
+    discover_rest(searched, bundled_resource_app_toml())
+}
+
+pub fn discover_config(app: &App) -> Result<ConfigDiscovery, DiscoverError> {
+    let mut searched = Vec::new();
+
+    if let Some(discovery) = found(try_cli_config(&mut searched))? {
+        return Ok(discovery);
+    }
+
+    let bundled = match app.path().resolve("app.toml", BaseDirectory::Resource) {
+        Ok(path) => Some(path),
+        Err(_) => bundled_resource_app_toml(),
+    };
+
+    discover_rest(searched, bundled)
 }
 
 #[cfg(test)]

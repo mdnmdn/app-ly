@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tax Appointments — FiscoDesk</title>
+  <link rel="stylesheet" href="../css/common.css" />
+</head>
+<body class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand"><div class="sidebar-logo">FD</div><div><div class="sidebar-title">FiscoDesk</div><div class="sidebar-sub">Invoice & Tax</div></div></div>
+    <div class="nav-section">Main</div>
+    <ul class="nav-list">
+      <li><a class="nav-link" href="dashboard.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="10" y="2" width="6" height="6" rx="1"/><rect x="2" y="10" width="6" height="6" rx="1"/><rect x="10" y="10" width="6" height="6" rx="1"/></svg>Dashboard</a></li>
+      <li><a class="nav-link" href="invoices.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2h10l2 2v12H4V2z"/><path d="M6 6h6M6 9h6M6 12h4"/></svg>Invoices</a></li>
+      <li><a class="nav-link" href="customers.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="6" r="3"/><path d="M3 16c0-3.3 2.7-6 6-6s6 2.7 6 6"/></svg>Customers</a></li>
+    </ul>
+    <div class="nav-section">Tax</div>
+    <ul class="nav-list">
+      <li><a class="nav-link" href="tax-regimes.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 4h12M3 8h12M3 12h8"/></svg>Tax Regimes</a></li>
+      <li><a class="nav-link" href="fiscal-years.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="12" height="11" rx="1"/><path d="M3 8h12M6 2v4M12 2v4"/></svg>Fiscal Years</a></li>
+      <li><a class="nav-link active" href="tax-appointments.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="12" height="11" rx="1"/><path d="M3 8h12M7 11h2M11 11h2"/></svg>Tax Appointments</a></li>
+      <li><a class="nav-link" href="payments.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 6h14v8H2z"/><path d="M2 9h14M5 12h4"/></svg>Payments</a></li>
+      <li><a class="nav-link disabled" href="reports.html"><svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 14V8M7 14V4M11 14V10M15 14V6"/></svg>Reports</a></li>
+    </ul>
+  </aside>
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1>Tax Appointments</h1>
+      <p class="text-sm text-muted topbar-sub">Deadlines scoped to a fiscal year</p>
+    </div>
+    <div class="topbar-right">
+      <label class="text-sm text-muted" style="display:flex;align-items:center;gap:6px">
+        <input type="checkbox" data-fy-include-next /> Include next FY
+      </label>
+      <select class="select select-sm" aria-label="Fiscal year" data-fy-filter>
+        <option value="2025" selected>FY 2025</option>
+        <option value="2024">FY 2024</option>
+        <option value="2023">FY 2023</option>
+      </select>
+      <button class="btn btn-ghost btn-icon" data-theme-toggle title="Toggle theme"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12a5 5 0 010-10 5 5 0 000 10z"/></svg></button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="toolbar">
+      <p class="text-muted text-sm">Showing appointments for <strong data-fy-label>FY 2025</strong> · toggle “Include next FY” to plan ahead</p>
+      <div class="toolbar-spacer"></div>
+      <button class="btn btn-sm">Export CSV</button>
+      <button class="btn btn-sm">Export PDF</button>
+      <button class="btn btn-primary" data-inline-new="appointments-table">New Appointment</button>
+    </div>
+
+    <div class="calendar-layout">
+      <div class="card">
+        <div class="card-body calendar">
+          <div class="calendar-header">
+            <button class="btn btn-sm btn-ghost" data-cal-prev>←</button>
+            <strong data-cal-label data-month-idx="5" data-year="2025">June 2025</strong>
+            <button class="btn btn-sm btn-ghost" data-cal-next>→</button>
+          </div>
+          <div class="calendar-grid">
+            <div class="cal-dow">Mo</div><div class="cal-dow">Tu</div><div class="cal-dow">We</div><div class="cal-dow">Th</div><div class="cal-dow">Fr</div><div class="cal-dow">Sa</div><div class="cal-dow">Su</div>
+            <div class="cal-day other">26</div><div class="cal-day other">27</div><div class="cal-day other">28</div><div class="cal-day other">29</div><div class="cal-day other">30</div><div class="cal-day other">31</div><div class="cal-day">1</div>
+            <div class="cal-day">2</div><div class="cal-day">3</div><div class="cal-day">4</div><div class="cal-day">5</div><div class="cal-day">6</div><div class="cal-day">7</div><div class="cal-day">8</div>
+            <div class="cal-day">9</div><div class="cal-day">10</div><div class="cal-day">11</div><div class="cal-day">12</div><div class="cal-day">13</div><div class="cal-day">14</div><div class="cal-day">15</div>
+            <div class="cal-day today has-event">16</div><div class="cal-day">17</div><div class="cal-day">18</div><div class="cal-day">19</div><div class="cal-day has-event">20</div><div class="cal-day">21</div><div class="cal-day">22</div>
+            <div class="cal-day">23</div><div class="cal-day">24</div><div class="cal-day">25</div><div class="cal-day">26</div><div class="cal-day">27</div><div class="cal-day">28</div><div class="cal-day">29</div>
+            <div class="cal-day">30</div><div class="cal-day other">1</div><div class="cal-day other">2</div><div class="cal-day other">3</div><div class="cal-day other">4</div><div class="cal-day other">5</div><div class="cal-day other">6</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table" id="appointments-table" data-inline-table data-fy-filter="true" data-row-fy="2025">
+          <thead>
+            <tr>
+              <th data-field="date" class="col-required" data-type="date">Date</th>
+              <th data-field="type" class="col-required" data-type="select" data-options="Tax|Inarcassa|VAT|Top-up|Other">Type</th>
+              <th data-field="amount" class="col-required num" data-type="eur">Amount</th>
+              <th data-field="status" class="col-required" data-type="select" data-options="Current|Planned">Status</th>
+              <th data-field="fy" class="col-required" data-type="select" data-options="2025|2026|2024">FY</th>
+              <th data-field="notes" data-type="textarea">Notes</th>
+              <th data-field="actions"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-fy="2025">
+              <td data-field="date" data-value="2025-07-16">16/07/2025</td>
+              <td data-field="type" data-value="Tax">Tax</td>
+              <td data-field="amount" data-value="1828.13" class="num" data-eur="1828.13">—</td>
+              <td data-field="status" data-value="Current"><span class="badge badge-current">Current</span></td>
+              <td data-field="fy" data-value="2025"><span class="badge badge-fy">FY 2025</span></td>
+              <td data-field="notes" data-value="Q2 income tax" class="text-muted">Q2 income tax</td>
+              <td class="actions" data-field="actions">
+                <span class="row-actions-view"><button type="button" class="btn btn-sm btn-primary">Mark Paid</button><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button></span>
+                <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+              </td>
+            </tr>
+            <tr data-fy="2025">
+              <td data-field="date" data-value="2025-08-20">20/08/2025</td>
+              <td data-field="type" data-value="Inarcassa">Inarcassa</td>
+              <td data-field="amount" data-value="1340.63" class="num" data-eur="1340.63">—</td>
+              <td data-field="status" data-value="Planned"><span class="badge badge-planned">Planned</span></td>
+              <td data-field="fy" data-value="2025"><span class="badge badge-fy">FY 2025</span></td>
+              <td data-field="notes" data-value="Q2 social security" class="text-muted">Q2 social security</td>
+              <td class="actions" data-field="actions">
+                <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost">Mark Paid</button><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button></span>
+                <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+              </td>
+            </tr>
+            <tr data-fy="2025">
+              <td data-field="date" data-value="2025-10-16">16/10/2025</td>
+              <td data-field="type" data-value="Tax">Tax</td>
+              <td data-field="amount" data-value="1950" class="num" data-eur="1950">—</td>
+              <td data-field="status" data-value="Planned"><span class="badge badge-planned">Planned</span></td>
+              <td data-field="fy" data-value="2025"><span class="badge badge-fy">FY 2025</span></td>
+              <td data-field="notes" data-value="Q3 income tax" class="text-muted">Q3 income tax</td>
+              <td class="actions" data-field="actions">
+                <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost">Mark Paid</button><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button></span>
+                <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+              </td>
+            </tr>
+            <tr data-fy="2026" class="appt-fy-next">
+              <td data-field="date" data-value="2026-01-16">16/01/2026</td>
+              <td data-field="type" data-value="Tax">Tax</td>
+              <td data-field="amount" data-value="2100" class="num" data-eur="2100">—</td>
+              <td data-field="status" data-value="Planned"><span class="badge badge-planned">Planned</span></td>
+              <td data-field="fy" data-value="2026"><span class="badge badge-fy">FY 2026</span></td>
+              <td data-field="notes" data-value="Q4 income tax (next FY)" class="text-muted">Q4 income tax (next FY)</td>
+              <td class="actions" data-field="actions">
+                <span class="row-actions-view"><button type="button" class="btn btn-sm btn-ghost">Mark Paid</button><button type="button" class="btn btn-sm btn-ghost" data-inline-edit>Edit</button></span>
+                <span class="row-actions-edit" hidden><button type="button" class="btn btn-sm btn-primary" data-inline-save>Save</button><button type="button" class="btn btn-sm" data-inline-cancel>Cancel</button></span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script src="../js/app.js"></script>
+</body>
+</html>
