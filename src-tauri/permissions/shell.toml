@@ -8,6 +8,8 @@ commands.allow = [
   "shell_rename_file",
   "shell_open_file",
   "shell_open_file_location",
+  "shell_read_clipboard",
+  "shell_write_clipboard",
   "shell_log",
   "shell_notify",
   "shell_fetch",

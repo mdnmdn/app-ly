@@ -10,7 +10,7 @@ Generic Tauri desktop shell that loads app identity and UI from `app.toml`.
 - `contents/` — static HTML/JS/CSS loaded into the window
 - optional icon asset
 
-The shell exposes `window.shell` to contents HTML for persistence, logging, notifications, CORS-free HTTP, and SQLite databases stored in `dataPath`, OS keychain secrets, HTTP/WebSocket servers, allowlisted subprocess execution, and an on-device LLM.
+The shell exposes `window.shell` to contents HTML for persistence, logging, notifications, CORS-free HTTP, and SQLite databases stored in `dataPath`, OS keychain secrets, HTTP/WebSocket servers, allowlisted subprocess execution, file drop and native clipboard, and an on-device LLM.
 
 ## Config
 
@@ -83,6 +83,7 @@ Files:
 | [`src-tauri/src/server.rs`](src-tauri/src/server.rs) | Embedded HTTP server and WebSocket server |
 | [`src-tauri/src/webdriver.rs`](src-tauri/src/webdriver.rs) | In-process W3C WebDriver subset (HTTP endpoint, session/element model, JS harness bridge) |
 | [`src-tauri/src/process.rs`](src-tauri/src/process.rs) | Allowlisted subprocess execution (`shell_run`, `shell_spawn`, stdin, exit/kill, runtime timeout, allowlist introspection) |
+| [`src-tauri/src/transfer.rs`](src-tauri/src/transfer.rs) | Native file drop (`shell://file-drop`) and pasteboard read/write (`shell_read_clipboard`, `shell_write_clipboard`); file bodies without paths |
 | [`src-tauri/src/ai.rs`](src-tauri/src/ai.rs) | On-device AI (`shell.ai`): commands, tool bridge, JSON Schema translation, backend selection; backends in [`src-tauri/src/ai/`](src-tauri/src/ai/) (`backend_apple.rs` for macOS + the `ai-apple` feature, `backend_stub.rs` everywhere else) |
 | [`src-tauri/src/menu.rs`](src-tauri/src/menu.rs) | Native app menu (Reload, Open DevTools) |
 | [`src-tauri/src/cli.rs`](src-tauri/src/cli.rs) | Headless CLI (`app-ly ai`, `db`, `file`, `fetch`, `run`, `info`) — no window |
@@ -111,6 +112,9 @@ Injected as `window.shell` before page scripts run. Keyboard shortcuts are injec
 - `secretGet(service, account)` — OS keychain retrieve
 - `secretDelete(service, account)` — OS keychain delete
 - `httpStart(options?)`, `httpRespond(id, status, headers?, body?)`, `httpStop()` — local HTTP server
+- `onFileDrop(callback)` — native file drop (`enter`/`over`/`drop`/`leave`); files as `{ name, mime, size, body, encoding }`, no paths
+- `readClipboard()` — native pasteboard `{ text, html, files }`; empty clipboard resolves empty, does not reject
+- `writeClipboard({ text?, html?, files? })` — replace the pasteboard; empty input clears; file bodies staged without paths
 - `onHttpRequest(callback)` — incoming HTTP request events
 - `wsStart(options?)`, `wsSend(id, data)`, `wsClose(id)`, `wsStop()` — local WebSocket server
 - `onWsConnection(callback)`, `onWsMessage(callback)`, `onWsClose(callback)` — WebSocket events

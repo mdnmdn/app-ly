@@ -35,6 +35,8 @@ keyring = "4"
 tiny_http = "0.12"
 tungstenite = "0.24"
 regex = "1"
+base64 = "0.22"
+clipboard-rs = { version = "0.3", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

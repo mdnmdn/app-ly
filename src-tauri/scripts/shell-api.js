@@ -478,6 +478,14 @@
     openFile: (name) => window.__TAURI__.core.invoke("shell_open_file", { name }),
     openFileLocation: (name) =>
       window.__TAURI__.core.invoke("shell_open_file_location", { name }),
+    readClipboard: () =>
+      window.__TAURI__.core.invoke("shell_read_clipboard"),
+    writeClipboard: (payload = {}) =>
+      window.__TAURI__.core.invoke("shell_write_clipboard", {
+        text: payload.text ?? null,
+        html: payload.html ?? null,
+        files: Array.isArray(payload.files) ? payload.files : [],
+      }),
     log: (message, level) =>
       window.__TAURI__.core.invoke("shell_log", {
         message,
@@ -552,6 +560,10 @@
     onWindowClosed: (callback) =>
       window.__TAURI__.event.listen("shell://window-closed", (event) =>
         callback(event.payload.id),
+      ),
+    onFileDrop: (callback) =>
+      window.__TAURI__.event.listen("shell://file-drop", (event) =>
+        callback(event.payload),
       ),
 
     // ── Secure Store (keyring-rs) ─────────────────────────────────────

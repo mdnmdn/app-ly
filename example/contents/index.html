@@ -41,6 +41,17 @@
         background: rgba(127, 127, 127, 0.15);
         overflow-x: auto;
       }
+
+      .drop-zone {
+        border: 2px dashed rgba(127, 127, 127, 0.5);
+        border-radius: 0.5rem;
+        padding: 1.25rem;
+        text-align: center;
+      }
+
+      .drop-zone.active {
+        border-color: #3a8;
+      }
     </style>
   </head>
   <body>
@@ -52,6 +63,14 @@
       <button id="save">Save note</button>
       <button id="load">Load note</button>
       <button id="notify">Notify</button>
+    </section>
+
+    <section>
+      <h2>Drop &amp; clipboard</h2>
+      <div id="drop-zone" class="drop-zone">Drop files here</div>
+      <button id="copy-text">Copy text</button>
+      <button id="copy-file">Copy CSV</button>
+      <button id="paste">Read clipboard</button>
     </section>
 
     <section>
@@ -131,6 +150,69 @@
       document.getElementById("notify").addEventListener("click", async () => {
         await shell.notify("Shell Example", "Notification from contents HTML");
         show("Notification sent.");
+      });
+
+      // ── Drop & clipboard ─────────────────────────────────────────────
+
+      function summarizeFiles(files) {
+        if (!files.length) return "(no files)";
+        return files
+          .map((file) => {
+            const preview =
+              file.body == null
+                ? "(body omitted)"
+                : file.body.length > 80
+                  ? file.body.slice(0, 80) + "…"
+                  : file.body;
+            return `${file.name}  ${file.mime}  ${file.size}B  ${file.encoding || "-"}  ${preview}`;
+          })
+          .join("\n");
+      }
+
+      const dropZone = document.getElementById("drop-zone");
+      shell
+        .onFileDrop((event) => {
+          if (event.type === "enter" || event.type === "over") {
+            dropZone.classList.add("active");
+            if (event.type === "enter" && event.files.length) {
+              dropZone.textContent = `Drop ${event.files.map((f) => f.name).join(", ")}`;
+            }
+            return;
+          }
+          dropZone.classList.remove("active");
+          dropZone.textContent = "Drop files here";
+          if (event.type === "drop") show(summarizeFiles(event.files));
+        })
+        .catch((error) => show(String(error)));
+
+      document.getElementById("copy-text").addEventListener("click", async () => {
+        await shell.writeClipboard({ text: "hello from app-ly" });
+        show("Copied text.");
+      });
+
+      document.getElementById("copy-file").addEventListener("click", async () => {
+        await shell.writeClipboard({
+          files: [
+            {
+              name: "export.csv",
+              mime: "text/csv",
+              body: "name,amount\nAda,12\n",
+              encoding: "text",
+            },
+          ],
+        });
+        show("Copied export.csv.");
+      });
+
+      document.getElementById("paste").addEventListener("click", async () => {
+        const clip = await shell.readClipboard();
+        const lines = [
+          `text: ${clip.text == null ? "(none)" : JSON.stringify(clip.text)}`,
+          `html: ${clip.html == null ? "(none)" : JSON.stringify(clip.html)}`,
+          "files:",
+          summarizeFiles(clip.files),
+        ];
+        show(lines.join("\n"));
       });
 
       // ── Network ──────────────────────────────────────────────────────

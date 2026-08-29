@@ -48,6 +48,9 @@ app-ly/
 │   │   ├── server.rs          # Embedded HTTP server + WebSocket server
 │   │   ├── webdriver.rs       # In-process W3C WebDriver subset: HTTP endpoint, session/element
 │   │   │                        # model, JS harness bridge
+│   │   ├── transfer.rs        # Native file drop (shell://file-drop) and clipboard
+│   │   │                        # read/write (shell.readClipboard / writeClipboard);
+│   │   │                        # shared file payload, no paths
 │   │   ├── process.rs         # Allowlisted subprocess execution (shell.run/spawn), argument
 │   │   │                        # matching against the [[allowedCommands]] regex allowlist, and
 │   │   │                        # live process control (stdin, exit/kill, re-armable timeout)

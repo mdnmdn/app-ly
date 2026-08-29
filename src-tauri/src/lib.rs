@@ -9,6 +9,7 @@ mod menu;
 mod paths;
 mod process;
 mod server;
+mod transfer;
 mod webdriver;
 
 use ai::{
@@ -43,6 +44,7 @@ use server::{
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use transfer::{shell_read_clipboard, shell_write_clipboard};
 
 fn shell_init_script(show_dev_menu: bool, settings: &HashMap<String, String>) -> String {
     let settings_json = serde_json::to_string(settings).unwrap_or_else(|_| "{}".into());
@@ -343,7 +345,8 @@ pub fn run() {
                 }
             }
 
-            window_builder.build()?;
+            let window = window_builder.build()?;
+            transfer::listen_file_drop(&window);
             menu::setup_app_menu(app, &plan.window_title, plan.show_dev_menu)?;
 
             // Started last so the endpoint only ever answers once the window
@@ -361,6 +364,8 @@ pub fn run() {
             shell_rename_file,
             shell_open_file,
             shell_open_file_location,
+            shell_read_clipboard,
+            shell_write_clipboard,
             shell_log,
             shell_notify,
             shell_fetch,

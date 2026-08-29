@@ -4,7 +4,7 @@
 
 A prebuilt desktop shell. You supply an `app.toml`, a folder of static HTML/JS/CSS, and an icon. Launching the binary *is* the app.
 
-`window.shell` is injected before page scripts run and covers the things a plain web page cannot do: files, SQLite, CORS-free HTTP, notifications, windows, the OS keychain, local servers, allowlisted programs, and an on-device model. No npm, bundler, framework, or compile step.
+`window.shell` is injected before page scripts run and covers the things a plain web page cannot do: files, SQLite, CORS-free HTTP, notifications, windows, the OS keychain, local servers, allowlisted programs, file drop and native clipboard, and an on-device model. No npm, bundler, framework, or compile step.
 
 ## Minimum viable app
 
@@ -120,6 +120,31 @@ await shell.deleteFile("report-final.csv");
 ```
 
 `openFile` / `openFileLocation` resolve once the OS has been asked, not once the other app launches. On Linux, `openFileLocation` opens the folder rather than selecting the file. Both names stay inside `dataPath`.
+
+### `onFileDrop` / `readClipboard` / `writeClipboard`
+
+Native file drop and pasteboard. Paths stay in Rust; JS gets `{ name, mime, size, body, encoding }`. UTF-8 (no NUL) is `encoding: "text"`, anything else `"base64"`. Bodies over 8 MiB are `null` on read (name/mime/size remain) and reject the whole write. Directories are skipped.
+
+```javascript
+const unlisten = await shell.onFileDrop((event) => {
+  if (event.type !== "drop") return;
+  for (const file of event.files) {
+    if (file.body == null) continue;
+  }
+});
+
+const clip = await shell.readClipboard();
+// { text, html, files } — empty clipboard is nulls/[], never rejects
+
+await shell.writeClipboard({ text: "hello" });
+await shell.writeClipboard({
+  files: [{ name: "export.csv", body: "a,b\n1,2", encoding: "text" }],
+});
+```
+
+- `onFileDrop` types: `"enter"` | `"over"` | `"drop"` | `"leave"`. Files (metadata only) on `enter`; bodies on `drop`. HTML5 `dataTransfer.files` from Finder is not available — the native handler owns the drop.
+- `readClipboard` is for a Paste button (no user gesture). `⌘V` in text fields already works via the Edit menu. Finder-copied files come through `files`; `text`/`html` are then `null` so paths are not leaked.
+- `writeClipboard` is for a Copy button. Replaces the pasteboard; empty input clears it. File names are simple filenames; bodies are staged in a temp dir.
 
 ### `dbQuery` / `dbExecute` / `dbClose`
 

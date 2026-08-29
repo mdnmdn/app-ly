@@ -23,7 +23,7 @@ The shell calls Tauri’s `WebviewWindow::open_devtools` / `close_devtools` (via
 
 The same actions are in the native app menu under **View** → **Reload** / **Open DevTools** (DevTools follows `showDevMenu`).
 
-The **Edit** menu (Cut/Copy/Paste/Select All) is always present, unconditionally — it's what gives standard text inputs and `contenteditable` regions working clipboard shortcuts. Nothing to configure.
+The **Edit** menu (Cut/Copy/Paste/Select All) is always present, unconditionally — it's what gives standard text inputs and `contenteditable` regions working clipboard shortcuts. Nothing to configure. For a Paste *button* that must read files or run without a keyboard gesture, use [`shell.readClipboard()`](#shellreadclipboard). For a Copy *button*, use [`shell.writeClipboard()`](#shellwriteclipboard).
 
 ## `shell.settings`
 
@@ -117,6 +117,73 @@ Reveals a file in the OS's file manager (Finder/Explorer), selecting it. On Linu
 ```javascript
 await shell.openFileLocation("report.csv");
 ```
+
+## `shell.onFileDrop(callback)`
+
+Subscribes to native file-drop events on the main window (Finder / Explorer / file manager). Tauri's drag-drop handler stays enabled, so HTML5 `dataTransfer.files` from outside the app does not fire; use this instead. Intra-app HTML5 drag is similarly intercepted — pointer-event drag inside the page is unaffected.
+
+Rust reads each dropped file. The payload never includes filesystem paths.
+
+- `callback` — function receiving `{ type, files }`
+  - `type` — `"enter"` | `"over"` | `"drop"` | `"leave"`
+  - `files` — array of `{ name, mime, size, body, encoding }`. Populated on `enter` (metadata only: `body` is `null`) and `drop` (body read). `over` and `leave` have an empty `files` array. Directories are skipped.
+  - `encoding` — `"text"` if the bytes are UTF-8 with no NUL, `"base64"` otherwise. `null` when `body` is `null`.
+  - `body` — file contents, or `null` when the file is larger than 8 MiB (name/mime/size are still present) or on `enter`
+- Returns: `Promise<UnlistenFn>` — call the resolved function to stop listening
+
+```javascript
+const unlisten = await shell.onFileDrop((event) => {
+  if (event.type !== "drop") return;
+  for (const file of event.files) {
+    if (file.body == null) continue; // oversize
+    // file.name, file.mime, file.size, file.encoding
+  }
+});
+```
+
+## `shell.readClipboard()`
+
+Reads the OS pasteboard. No user gesture required — use this to back a Paste button, not instead of `⌘V` / `Ctrl+V` in text fields (those already work via the Edit menu).
+
+- Returns: `Promise<{ text, html, files }>`
+  - `text` — plain text, or `null`
+  - `html` — HTML flavor, or `null`
+  - `files` — same shape as `onFileDrop` (`name`, `mime`, `size`, `body`, `encoding`). Finder/Explorer-copied files are read in Rust from pasteboard file URLs; paths are not included. Bodies follow the same 8 MiB cap.
+- Empty clipboard resolves with `{ text: null, html: null, files: [] }`. It does not reject.
+- When the clipboard holds files, `text` and `html` are `null` so a file-manager copy cannot leak paths through the string flavors.
+
+```javascript
+const clip = await shell.readClipboard();
+if (clip.files.length) {
+  // import clip.files
+} else if (clip.text) {
+  // paste clip.text
+}
+```
+
+## `shell.writeClipboard({ text?, html?, files? })`
+
+Replaces the OS pasteboard. No user gesture required — use this to back a Copy button, not instead of `⌘C` / `Ctrl+C` in text fields (those already work via the Edit menu).
+
+- `text` — plain text to put on the pasteboard, or omit/`null`
+- `html` — HTML flavor, or omit/`null`
+- `files` — same shape as `onFileDrop` / `readClipboard` (`name`, `mime`, `size`, `body`, `encoding`). `name` is a simple filename (no `/`, `\`, `..`). `body` is required. `encoding` is `"text"` (default) or `"base64"`. Rust writes the bytes to a temp file and puts that on the pasteboard as a file URL; JS never supplies or receives paths. Same 8 MiB cap as read — oversize files reject the whole write.
+- Returns: `Promise<void>`
+- Empty `{ text, html, files }` (or `writeClipboard()`) clears the clipboard.
+- Empty strings are treated as absent, same as read.
+
+```javascript
+await shell.writeClipboard({ text: "hello" });
+await shell.writeClipboard({
+  text: "Name,Amount\nAda,12",
+  html: "<table><tr><td>Ada</td><td>12</td></tr></table>",
+});
+await shell.writeClipboard({
+  files: [{ name: "export.csv", mime: "text/csv", body: "a,b\n1,2", encoding: "text" }],
+});
+```
+
+`readClipboard` still hides `text`/`html` when the pasteboard holds files (Finder-copy protection). A write that sets both files and strings will copy both for other apps, but a later `readClipboard` in this shell will only return the files.
 
 ## `shell.log(message, level?)`
 
