@@ -1,6 +1,6 @@
 [package]
 name = "app-ly"
-version = "0.28.0"
+version = "0.29.0"
 description = "Generic Tauri shell container"
 authors = ["you"]
 edition = "2021"
